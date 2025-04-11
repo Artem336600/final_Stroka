@@ -5,9 +5,12 @@
     --text-secondary: #64748b;
     --accent: #3b82f6;
     --accent-hover: #2563eb;
+    --accent-light: rgba(59, 130, 246, 0.1);
     --glass-bg: rgba(255, 255, 255, 0.8);
     --glass-border: rgba(226, 232, 240, 0.8);
     --card-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+    --error-color: #ef4444;
+    --success-color: #10b981;
 }
 
 body {
@@ -18,8 +21,107 @@ body {
     background: linear-gradient(135deg, var(--bg-primary), var(--bg-secondary));
     color: var(--text-primary);
     display: flex;
-    justify-content: center;
+    flex-direction: column;
     align-items: center;
+}
+
+/* Навигационная панель */
+.navbar {
+    width: 100%;
+    background: var(--glass-bg);
+    backdrop-filter: blur(10px);
+    border-bottom: 1px solid var(--glass-border);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 0.75rem 2rem;
+    box-shadow: var(--card-shadow);
+    box-sizing: border-box;
+    position: sticky;
+    top: 0;
+    z-index: 100;
+}
+
+.logo {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    font-weight: 700;
+    font-size: 1.2rem;
+    color: var(--accent);
+}
+
+.logo svg {
+    color: var(--accent);
+}
+
+.profile-section {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+}
+
+.auth-buttons {
+    display: flex;
+    gap: 0.75rem;
+}
+
+.login-btn {
+    background: transparent;
+    color: var(--accent);
+    border: 1px solid var(--accent);
+    padding: 0.5rem 1.25rem;
+    font-size: 0.9rem;
+    border-radius: 8px;
+    transition: all 0.2s ease;
+    box-shadow: none;
+}
+
+.login-btn:hover {
+    background: var(--accent-light);
+    transform: translateY(-1px);
+}
+
+.register-btn {
+    background: var(--accent);
+    color: white;
+    border: none;
+    padding: 0.5rem 1.25rem;
+    font-size: 0.9rem;
+    border-radius: 8px;
+    transition: all 0.2s ease;
+}
+
+.register-btn:hover {
+    background: var(--accent-hover);
+    transform: translateY(-1px);
+}
+
+.user-profile {
+    display: flex;
+    align-items: center;
+    cursor: pointer;
+}
+
+.profile-icon {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.5rem 1rem;
+    border-radius: 8px;
+    background: var(--accent-light);
+    color: var(--accent);
+    transition: all 0.2s ease;
+}
+
+.profile-icon:hover {
+    background: rgba(59, 130, 246, 0.2);
+    transform: translateY(-1px);
+}
+
+#userDisplayName {
+    font-weight: 500;
+    font-size: 0.9rem;
 }
 
 .container {
@@ -31,6 +133,8 @@ body {
     border-radius: 20px;
     padding: 2rem;
     box-shadow: var(--card-shadow);
+    margin-top: 2rem;
+    margin-bottom: 2rem;
 }
 
 h1 {
@@ -148,16 +252,29 @@ button:hover {
     text-align: center;
     display: none;
     margin: 2rem 0;
+    padding: 2rem;
+    background: rgba(255, 255, 255, 0.9);
+    border-radius: 12px;
+    box-shadow: var(--card-shadow);
+    z-index: 10;
+    position: relative;
 }
 
 .spinner {
     border: 3px solid rgba(59, 130, 246, 0.1);
     border-radius: 50%;
     border-top: 3px solid var(--accent);
-    width: 2rem;
-    height: 2rem;
+    width: 3rem;
+    height: 3rem;
     animation: spin 1s linear infinite;
-    margin: 0 auto;
+    margin: 0 auto 1rem;
+}
+
+.loading p {
+    color: var(--text-primary);
+    font-weight: 500;
+    margin-top: 0.5rem;
+    font-size: 1rem;
 }
 
 @keyframes spin {
@@ -265,19 +382,37 @@ button:hover {
 .category-Кулинария .tag { background: rgba(249, 115, 22, 0.1); color: #f97316; border-color: rgba(249, 115, 22, 0.2); }
 
 @media (max-width: 768px) {
+    .navbar {
+        padding: 0.75rem 1rem;
+    }
+    
     .container {
-        width: 95%;
-        padding: 1.5rem;
+        width: calc(100% - 2rem);
+        padding: 1.5rem 1rem;
     }
     
     h1 {
         font-size: 2rem;
     }
     
-    .modal-content {
+    .input-container {
+        flex-direction: column;
+    }
+    
+    #userInput {
+        width: 100%;
+    }
+    
+    .auth-buttons, .user-profile {
+        font-size: 0.9rem;
+    }
+    
+    .logo span {
+        display: none;
+    }
+    
+    .auth-modal, .profile-modal {
         width: 95%;
-        padding: 1.5rem;
-        margin: 1rem auto;
     }
 }
 
@@ -407,20 +542,34 @@ button:hover {
 }
 
 .search-results {
+    display: none;
+    flex-direction: column;
+    gap: 0.5rem;
     max-height: 300px;
     overflow-y: auto;
     margin-bottom: 1rem;
     background: white;
-    border-radius: 8px;
+    border-radius: 12px;
     border: 1px solid var(--glass-border);
-    padding: 0.5rem;
-    position: absolute;
-    width: 90%;
+    padding: 1rem;
+    position: relative;
     z-index: 10;
 }
 
 .search-results .available-tag {
-    margin: 0.25rem;
+    margin: 0.25rem 0;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+}
+
+.no-tags-message {
+    text-align: center;
+    padding: 1.5rem 0;
+    color: var(--text-secondary);
+    font-size: 0.95rem;
+    background: rgba(226, 232, 240, 0.3);
+    border-radius: 8px;
 }
 
 .tag-pill {
@@ -663,4 +812,545 @@ button:hover {
 
 .add-tag-btn:hover {
     background: rgba(59, 130, 246, 0.2);
+}
+
+/* Стили для иконки профиля */
+.profile-icon {
+    position: fixed;
+    top: 20px;
+    right: 20px;
+    width: 40px;
+    height: 40px;
+    background: var(--accent);
+    color: white;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    box-shadow: var(--card-shadow);
+    transition: all 0.3s ease;
+    z-index: 100;
+}
+
+.profile-icon:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 8px 15px rgba(0, 0, 0, 0.1);
+}
+
+/* Стили для регистрации */
+.registration-steps {
+    width: 100%;
+    position: relative;
+}
+
+.registration-step {
+    display: none;
+    opacity: 0;
+    transition: opacity 0.3s ease;
+}
+
+.registration-step.active {
+    display: block;
+    opacity: 1;
+}
+
+.form-group {
+    margin-bottom: 1.5rem;
+    width: 100%;
+}
+
+.form-group label {
+    display: block;
+    margin-bottom: 0.5rem;
+    font-weight: 500;
+    color: var(--text-primary);
+}
+
+.form-group input {
+    width: 100%;
+    padding: 0.75rem 1rem;
+    border-radius: 8px;
+    border: 1px solid var(--glass-border);
+    background: rgba(255, 255, 255, 0.9);
+    transition: all 0.3s ease;
+}
+
+.form-group input:focus {
+    outline: none;
+    border-color: var(--accent);
+    box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.2);
+}
+
+.form-hint {
+    margin-top: 0.5rem;
+    font-size: 0.75rem;
+    color: var(--text-secondary);
+}
+
+.step-buttons {
+    display: flex;
+    justify-content: space-between;
+    margin-top: 2rem;
+}
+
+.prev-step-btn {
+    background: var(--bg-secondary);
+    color: var(--text-primary);
+}
+
+.prev-step-btn:hover {
+    background: #e2e8f0;
+}
+
+.next-step-btn, .complete-btn {
+    background: var(--accent);
+}
+
+.bot-instructions {
+    background: rgba(59, 130, 246, 0.05);
+    padding: 1rem;
+    border-radius: 8px;
+    margin-bottom: 1.5rem;
+}
+
+.bot-instructions ol {
+    padding-left: 1.5rem;
+    margin: 0.5rem 0;
+}
+
+.bot-instructions li {
+    margin-bottom: 0.5rem;
+}
+
+.bot-instructions a {
+    color: var(--accent);
+    text-decoration: none;
+    font-weight: 500;
+}
+
+.bot-instructions a:hover {
+    text-decoration: underline;
+}
+
+/* Стили для успешной регистрации */
+.registration-success {
+    text-align: center;
+    padding: 2rem 0;
+}
+
+.checkmark {
+    width: 80px;
+    height: 80px;
+    margin: 0 auto 1.5rem auto;
+}
+
+.checkmark-circle {
+    stroke: #10b981;
+    stroke-width: 2;
+    stroke-dasharray: 166;
+    stroke-dashoffset: 166;
+    animation: stroke 0.6s cubic-bezier(0.65, 0, 0.45, 1) forwards;
+}
+
+.checkmark-check {
+    stroke: #10b981;
+    stroke-width: 2;
+    stroke-dasharray: 48;
+    stroke-dashoffset: 48;
+    animation: stroke 0.3s cubic-bezier(0.65, 0, 0.45, 1) 0.8s forwards;
+}
+
+@keyframes stroke {
+    100% {
+        stroke-dashoffset: 0;
+    }
+}
+
+.close-registration-btn {
+    margin-top: 1.5rem;
+    background: var(--accent);
+}
+
+/* Стили для ожидания подтверждения */
+.waiting-confirmation {
+    margin-top: 1.5rem;
+    padding: 1rem;
+    background: rgba(59, 130, 246, 0.05);
+    border-radius: 8px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-direction: column;
+}
+
+.small-spinner {
+    width: 1.5rem;
+    height: 1.5rem;
+    border-width: 2px;
+    margin-bottom: 0.5rem;
+}
+
+.waiting-confirmation p {
+    color: var(--accent);
+    font-weight: 500;
+    margin: 0;
+}
+
+/* Стили для вкладок авторизации */
+.auth-selector {
+    margin-bottom: 20px;
+}
+
+.auth-tabs {
+    display: flex;
+    border-bottom: 1px solid #e5e7eb;
+    margin-bottom: 20px;
+}
+
+.auth-tab {
+    padding: 12px 20px;
+    font-size: 16px;
+    font-weight: 500;
+    background: none;
+    border: none;
+    border-bottom: 2px solid transparent;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    color: #6b7280;
+}
+
+.auth-tab.active {
+    color: #3b82f6;
+    border-bottom: 2px solid #3b82f6;
+}
+
+.auth-tab:hover {
+    color: #2563eb;
+}
+
+.auth-form {
+    display: none;
+}
+
+.auth-form.active {
+    display: block;
+}
+
+/* Стиль для авторизованного пользователя */
+.profile-icon.logged-in {
+    background-color: #3b82f6;
+    color: white;
+}
+
+/* Стили для формы профиля */
+textarea {
+    width: 100%;
+    padding: 0.75rem 1rem;
+    border-radius: 8px;
+    border: 1px solid var(--glass-border);
+    background: rgba(255, 255, 255, 0.9);
+    transition: all 0.3s ease;
+    font-family: 'Inter', system-ui, -apple-system, sans-serif;
+    resize: vertical;
+}
+
+textarea:focus {
+    outline: none;
+    border-color: var(--accent);
+    box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.2);
+}
+
+.radio-group {
+    margin-top: 0.5rem;
+    display: flex;
+    gap: 1.5rem;
+}
+
+.radio-label {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    cursor: pointer;
+}
+
+.radio-label input[type="radio"] {
+    width: auto;
+    margin: 0;
+}
+
+.logout-btn {
+    background-color: #ef4444;
+    margin-left: 0.5rem;
+}
+
+.logout-btn:hover {
+    background-color: #dc2626;
+}
+
+/* Модальные окна авторизации и профиля */
+.auth-modal, .profile-modal {
+    max-width: 480px;
+}
+
+.form-error {
+    color: var(--error-color);
+    font-size: 0.875rem;
+    margin-top: 0.5rem;
+    margin-bottom: 0.5rem;
+    min-height: 1.25rem;
+}
+
+.profile-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 1.5rem;
+    padding-bottom: 1.5rem;
+    border-bottom: 1px solid var(--glass-border);
+}
+
+.profile-avatar {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 64px;
+    height: 64px;
+    background: var(--accent-light);
+    border-radius: 50%;
+    color: var(--accent);
+    margin-right: 1rem;
+}
+
+.profile-header h2 {
+    margin: 0;
+    flex-grow: 1;
+}
+
+.logout-btn {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    background: rgba(239, 68, 68, 0.1);
+    color: var(--error-color);
+    border: 1px solid rgba(239, 68, 68, 0.2);
+    padding: 0.5rem 1rem;
+    font-size: 0.875rem;
+    border-radius: 8px;
+    transition: all 0.2s ease;
+    box-shadow: none;
+}
+
+.logout-btn:hover {
+    background: rgba(239, 68, 68, 0.2);
+    color: var(--error-color);
+}
+
+.auth-selector {
+    margin-bottom: 1.5rem;
+}
+
+.auth-tabs {
+    display: flex;
+    background: var(--bg-secondary);
+    border-radius: 12px;
+    overflow: hidden;
+    box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.05);
+}
+
+.auth-tab {
+    flex: 1;
+    padding: 0.75rem;
+    text-align: center;
+    background: transparent;
+    border: none;
+    border-radius: 0;
+    color: var(--text-secondary);
+    font-weight: 500;
+    transition: all 0.2s ease;
+    box-shadow: none;
+}
+
+.auth-tab.active {
+    background: var(--accent);
+    color: white;
+}
+
+.auth-tab:hover:not(.active) {
+    background: rgba(255, 255, 255, 0.8);
+    color: var(--text-primary);
+}
+
+.auth-form {
+    display: none;
+}
+
+.auth-form.active {
+    display: block;
+}
+
+.form-group {
+    margin-bottom: 1.25rem;
+}
+
+.form-group label {
+    display: block;
+    margin-bottom: 0.5rem;
+    font-weight: 500;
+    color: var(--text-primary);
+    font-size: 0.95rem;
+}
+
+.form-group input, .form-group textarea {
+    width: 100%;
+    padding: 0.75rem 1rem;
+    border: 1px solid var(--glass-border);
+    border-radius: 8px;
+    background: rgba(255, 255, 255, 0.5);
+    font-size: 0.95rem;
+    box-sizing: border-box;
+    transition: all 0.2s ease;
+}
+
+.form-group input:focus, .form-group textarea:focus {
+    outline: none;
+    border-color: var(--accent);
+    box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.1);
+}
+
+.form-hint {
+    margin-top: 0.5rem;
+    font-size: 0.85rem;
+    color: var(--text-secondary);
+}
+
+.step-buttons {
+    display: flex;
+    justify-content: space-between;
+    margin-top: 1.5rem;
+}
+
+.prev-step-btn {
+    background: var(--bg-secondary);
+    color: var(--text-secondary);
+    border: 1px solid var(--glass-border);
+    box-shadow: none;
+}
+
+.prev-step-btn:hover {
+    background: white;
+    transform: translateY(-1px);
+}
+
+.next-step-btn, .complete-btn {
+    min-width: 120px;
+}
+
+.complete-btn {
+    background: var(--accent);
+    color: white;
+}
+
+.complete-btn:hover {
+    background: var(--accent-hover);
+}
+
+.radio-group {
+    display: flex;
+    gap: 1.5rem;
+    margin-top: 0.5rem;
+}
+
+.radio-label {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    cursor: pointer;
+    font-size: 0.95rem;
+    color: var(--text-primary);
+}
+
+.radio-label input[type="radio"] {
+    width: auto;
+    cursor: pointer;
+}
+
+.registration-success {
+    text-align: center;
+    padding: 2rem 0;
+}
+
+.checkmark {
+    width: 80px;
+    height: 80px;
+    margin: 0 auto 1.5rem;
+    display: block;
+}
+
+.checkmark-circle {
+    stroke-dasharray: 166;
+    stroke-dashoffset: 166;
+    stroke-width: 2;
+    stroke-miterlimit: 10;
+    stroke: var(--success-color);
+    animation: stroke 0.6s cubic-bezier(0.65, 0, 0.45, 1) forwards;
+}
+
+.checkmark-check {
+    transform-origin: 50% 50%;
+    stroke-dasharray: 48;
+    stroke-dashoffset: 48;
+    stroke-width: 3;
+    stroke: var(--success-color);
+    animation: stroke 0.3s cubic-bezier(0.65, 0, 0.45, 1) 0.8s forwards;
+}
+
+@keyframes stroke {
+    100% {
+        stroke-dashoffset: 0;
+    }
+}
+
+.bot-instructions {
+    background: rgba(59, 130, 246, 0.05);
+    border-radius: 12px;
+    padding: 1.5rem;
+    margin: 1.5rem 0;
+    border: 1px solid rgba(59, 130, 246, 0.1);
+}
+
+.bot-instructions ol {
+    padding-left: 1.5rem;
+    margin: 1rem 0;
+}
+
+.bot-instructions li {
+    margin-bottom: 0.75rem;
+}
+
+.bot-instructions a {
+    color: var(--accent);
+    text-decoration: none;
+    font-weight: 500;
+}
+
+.bot-instructions a:hover {
+    text-decoration: underline;
+}
+
+.waiting-confirmation {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    margin-top: 1.5rem;
+    padding: 1rem;
+    background: rgba(255, 255, 255, 0.7);
+    border-radius: 8px;
+    border: 1px solid var(--glass-border);
+}
+
+.small-spinner {
+    width: 1.5rem;
+    height: 1.5rem;
+    border-width: 2px;
 }

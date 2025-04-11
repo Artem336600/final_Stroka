@@ -1,11 +1,20 @@
 let allTags = {};
 let selectedTags = new Set();
 let modal;
+let authModal;
+let profileModal;
+let currentUser = null;
 
 // Загружаем теги при инициализации страницы
 window.addEventListener('DOMContentLoaded', async () => {
     try {
+        // Скрываем индикатор загрузки при инициализации страницы
+        document.getElementById('loading').style.display = 'none';
+        
         modal = document.getElementById('tagsModal');
+        authModal = document.getElementById('authModal');
+        profileModal = document.getElementById('profileModal');
+        
         const response = await fetch('/get_tags');
         if (!response.ok) {
             throw new Error('Ошибка при получении тегов');
@@ -16,10 +25,539 @@ window.addEventListener('DOMContentLoaded', async () => {
         
         // Инициализируем модальное окно
         initModal();
+        
+        // Добавляем обработчик для кнопки "Добавить тег"
+        const addTagBtn = document.getElementById('addTagBtn');
+        if (addTagBtn) {
+            addTagBtn.addEventListener('click', showTagsModal);
+        }
+        
+        // Добавляем обработчик для кнопки "Извлечь теги"
+        const submitBtn = document.getElementById('submitBtn');
+        if (submitBtn) {
+            submitBtn.addEventListener('click', extractTags);
+        }
+        
+        // Добавляем обработчик нажатия клавиши Enter в поле ввода
+        const userInput = document.getElementById('userInput');
+        if (userInput) {
+            userInput.addEventListener('keypress', (event) => {
+                if (event.key === 'Enter') {
+                    event.preventDefault();
+                    extractTags();
+                }
+            });
+        }
+        
+        // Инициализируем обработчики для элементов профиля и аутентификации
+        initAuthHandlers();
+        
+        // Проверяем, авторизован ли пользователь
+        checkUserAuthentication();
     } catch (error) {
         console.error('Ошибка при загрузке тегов:', error);
     }
 });
+
+// Проверка аутентификации пользователя
+async function checkUserAuthentication() {
+    // Получаем токен из localStorage
+    const token = localStorage.getItem('userToken');
+    
+    if (token) {
+        try {
+            // Получаем данные профиля
+            const response = await fetch('/get_user_profile', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({ token })
+            });
+            
+            if (response.ok) {
+                const data = await response.json();
+                if (data.status === 'success') {
+                    // Устанавливаем текущего пользователя
+                    currentUser = {
+                        token,
+                        telegram: data.user.tg,
+                        name: data.user.name || data.user.tg,
+                        role: data.user.who || 'student',
+                        about: data.user.about || ''
+                    };
+                    
+                    // Обновляем UI для авторизованного пользователя
+                    updateUIForAuthenticatedUser();
+                } else {
+                    // Если произошла ошибка, очищаем токен
+                    localStorage.removeItem('userToken');
+                    updateUIForUnauthenticatedUser();
+                }
+            } else {
+                // Если произошла ошибка, очищаем токен
+                localStorage.removeItem('userToken');
+                updateUIForUnauthenticatedUser();
+            }
+        } catch (error) {
+            console.error('Ошибка при проверке аутентификации:', error);
+            localStorage.removeItem('userToken');
+            updateUIForUnauthenticatedUser();
+        }
+    } else {
+        updateUIForUnauthenticatedUser();
+    }
+}
+
+// Обновление UI для авторизованного пользователя
+function updateUIForAuthenticatedUser() {
+    document.getElementById('userAuthSection').style.display = 'none';
+    document.getElementById('userProfileSection').style.display = 'flex';
+    document.getElementById('userDisplayName').textContent = currentUser.name;
+    
+    // Настраиваем данные профиля в модальном окне
+    document.getElementById('profileName').value = currentUser.name;
+    document.getElementById('profileAbout').value = currentUser.about;
+    
+    // Устанавливаем роль пользователя
+    const roleInputs = document.querySelectorAll('input[name="profileWho"]');
+    for (const input of roleInputs) {
+        if (input.value === currentUser.role) {
+            input.checked = true;
+            break;
+        }
+    }
+}
+
+// Обновление UI для неавторизованного пользователя
+function updateUIForUnauthenticatedUser() {
+    document.getElementById('userAuthSection').style.display = 'flex';
+    document.getElementById('userProfileSection').style.display = 'none';
+    currentUser = null;
+}
+
+// Инициализация обработчиков для аутентификации
+function initAuthHandlers() {
+    // Кнопки в навигационной панели
+    document.getElementById('loginButton').addEventListener('click', () => showAuthModal('login'));
+    document.getElementById('registerButton').addEventListener('click', () => showAuthModal('register'));
+    document.getElementById('profileIcon').addEventListener('click', showProfileModal);
+    
+    // Переключение вкладок внутри формы авторизации
+    document.getElementById('loginTab').addEventListener('click', () => switchAuthTab('login'));
+    document.getElementById('registerTab').addEventListener('click', () => switchAuthTab('register'));
+    
+    // Обработчики формы входа
+    document.getElementById('loginSubmitButton').addEventListener('click', handleLogin);
+    
+    // Обработчики формы регистрации
+    document.getElementById('nextStep1').addEventListener('click', () => processRegistrationStep(1));
+    document.getElementById('prevStep2').addEventListener('click', () => showRegistrationStep(1));
+    document.getElementById('prevStep3').addEventListener('click', () => showRegistrationStep(2));
+    document.getElementById('completeRegistration').addEventListener('click', finishRegistration);
+    document.getElementById('closeRegistration').addEventListener('click', closeAuthModal);
+    
+    // Обработчики для профиля
+    document.getElementById('saveProfileButton').addEventListener('click', saveUserProfile);
+    document.getElementById('logoutButton').addEventListener('click', logout);
+    
+    // Обработчики для закрытия модальных окон
+    const closeButtons = document.querySelectorAll('.close-btn');
+    closeButtons.forEach(button => {
+        button.addEventListener('click', () => {
+            const modalId = button.dataset.modal;
+            if (modalId) {
+                document.getElementById(modalId).style.display = 'none';
+            } else {
+                // Для кнопок без data-modal атрибута закрываем родительское модальное окно
+                const modalElement = button.closest('.modal');
+                if (modalElement) {
+                    modalElement.style.display = 'none';
+                }
+            }
+        });
+    });
+    
+    // Закрытие модальных окон при клике вне их области
+    window.addEventListener('click', (event) => {
+        if (event.target === authModal) {
+            authModal.style.display = 'none';
+        }
+        if (event.target === profileModal) {
+            profileModal.style.display = 'none';
+        }
+    });
+}
+
+// Показ модального окна авторизации
+function showAuthModal(tab = 'login') {
+    authModal.style.display = 'flex';
+    
+    // Очищаем поля формы и сообщения об ошибках
+    document.getElementById('loginTelegram').value = '';
+    document.getElementById('loginPassword').value = '';
+    document.getElementById('telegramUsername').value = '';
+    document.getElementById('password').value = '';
+    document.getElementById('confirmPassword').value = '';
+    
+    document.getElementById('loginError').textContent = '';
+    document.getElementById('step1Error').textContent = '';
+    document.getElementById('step3Error').textContent = '';
+    
+    // Переключаемся на нужную вкладку
+    switchAuthTab(tab);
+    
+    // Если открываем форму регистрации, показываем первый шаг
+    if (tab === 'register') {
+        showRegistrationStep(1);
+    }
+}
+
+// Закрытие модального окна авторизации
+function closeAuthModal() {
+    authModal.style.display = 'none';
+}
+
+// Переключение вкладок в форме авторизации
+function switchAuthTab(tab) {
+    const loginTab = document.getElementById('loginTab');
+    const registerTab = document.getElementById('registerTab');
+    const loginForm = document.getElementById('loginForm');
+    const registrationForm = document.getElementById('registrationForm');
+    
+    if (tab === 'login') {
+        loginTab.classList.add('active');
+        registerTab.classList.remove('active');
+        loginForm.classList.add('active');
+        registrationForm.classList.remove('active');
+    } else {
+        loginTab.classList.remove('active');
+        registerTab.classList.add('active');
+        loginForm.classList.remove('active');
+        registrationForm.classList.add('active');
+    }
+}
+
+// Показ определенного шага регистрации
+function showRegistrationStep(step) {
+    const steps = document.querySelectorAll('.registration-step');
+    steps.forEach(s => s.classList.remove('active'));
+    document.getElementById(`step${step}`).classList.add('active');
+}
+
+// Обработка входа пользователя
+async function handleLogin() {
+    const telegramUsername = document.getElementById('loginTelegram').value.trim();
+    const password = document.getElementById('loginPassword').value;
+    const errorElement = document.getElementById('loginError');
+    
+    // Очищаем сообщение об ошибке
+    errorElement.textContent = '';
+    
+    // Проверка введенных данных
+    if (!telegramUsername) {
+        errorElement.textContent = 'Введите имя пользователя в Telegram';
+        return;
+    }
+    
+    if (!password) {
+        errorElement.textContent = 'Введите пароль';
+        return;
+    }
+    
+    try {
+        // Отправляем запрос на сервер
+        const response = await fetch('/login', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                telegram_username: telegramUsername,
+                password: password
+            })
+        });
+        
+        const data = await response.json();
+        
+        if (data.status === 'success') {
+            // Сохраняем токен
+            localStorage.setItem('userToken', data.token);
+            
+            // Устанавливаем данные пользователя
+            currentUser = {
+                token: data.token,
+                telegram: telegramUsername,
+                name: data.user?.name || telegramUsername,
+                role: data.user?.who || 'student',
+                about: data.user?.about || ''
+            };
+            
+            // Обновляем UI
+            updateUIForAuthenticatedUser();
+            
+            // Закрываем модальное окно
+            closeAuthModal();
+        } else {
+            errorElement.textContent = data.message || 'Ошибка при входе в систему';
+        }
+    } catch (error) {
+        console.error('Ошибка при входе:', error);
+        errorElement.textContent = 'Произошла ошибка при входе в систему';
+    }
+}
+
+// Обработка шага регистрации
+async function processRegistrationStep(step) {
+    if (step === 1) {
+        const telegramUsername = document.getElementById('telegramUsername').value.trim();
+        const errorElement = document.getElementById('step1Error');
+        
+        // Очищаем сообщение об ошибке
+        errorElement.textContent = '';
+        
+        // Проверка введенных данных
+        if (!telegramUsername) {
+            errorElement.textContent = 'Введите имя пользователя в Telegram';
+            return;
+        }
+        
+        try {
+            // Отправляем запрос на создание запроса подтверждения
+            const response = await fetch('/create_confirmation_request', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    telegram_username: telegramUsername
+                })
+            });
+            
+            const data = await response.json();
+            
+            if (data.status === 'success') {
+                // Переходим к следующему шагу
+                showRegistrationStep(2);
+                
+                // Начинаем проверку статуса подтверждения
+                startConfirmationStatusCheck(telegramUsername);
+            } else {
+                errorElement.textContent = data.message || 'Ошибка при создании запроса';
+            }
+        } catch (error) {
+            console.error('Ошибка при создании запроса:', error);
+            errorElement.textContent = 'Произошла ошибка при создании запроса';
+        }
+    }
+}
+
+// Проверка статуса подтверждения
+async function startConfirmationStatusCheck(telegramUsername) {
+    const checkInterval = setInterval(async () => {
+        try {
+            const response = await fetch('/check_confirmation_status', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    telegram_username: telegramUsername
+                })
+            });
+            
+            const data = await response.json();
+            
+            if (data.status === 'success' && data.confirmation_status === 'accepted') {
+                // Останавливаем интервал
+                clearInterval(checkInterval);
+                
+                // Переходим к следующему шагу
+                showRegistrationStep(3);
+            } else if (data.status === 'success' && data.confirmation_status === 'rejected') {
+                // Останавливаем интервал
+                clearInterval(checkInterval);
+                
+                // Возвращаемся к первому шагу
+                showRegistrationStep(1);
+                
+                // Показываем сообщение об ошибке
+                document.getElementById('step1Error').textContent = 'Запрос был отклонен';
+            }
+        } catch (error) {
+            console.error('Ошибка при проверке статуса:', error);
+        }
+    }, 2000); // Проверяем каждые 2 секунды
+    
+    // Сохраняем интервал в глобальной переменной, чтобы можно было его остановить при необходимости
+    window.confirmationCheckInterval = checkInterval;
+}
+
+// Завершение регистрации
+async function finishRegistration() {
+    const telegramUsername = document.getElementById('telegramUsername').value.trim();
+    const password = document.getElementById('password').value;
+    const confirmPassword = document.getElementById('confirmPassword').value;
+    const errorElement = document.getElementById('step3Error');
+    
+    // Очищаем сообщение об ошибке
+    errorElement.textContent = '';
+    
+    // Проверка введенных данных
+    if (!password) {
+        errorElement.textContent = 'Введите пароль';
+        return;
+    }
+    
+    if (password.length < 8) {
+        errorElement.textContent = 'Пароль должен содержать не менее 8 символов';
+        return;
+    }
+    
+    if (password !== confirmPassword) {
+        errorElement.textContent = 'Пароли не совпадают';
+        return;
+    }
+    
+    try {
+        // Отправляем запрос на создание пользователя
+        const response = await fetch('/create_user', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                telegram_username: telegramUsername,
+                password: password
+            })
+        });
+        
+        const data = await response.json();
+        
+        if (data.status === 'success') {
+            // Переходим к последнему шагу
+            showRegistrationStep(4);
+            
+            // Устанавливаем таймер для закрытия модального окна
+            setTimeout(() => {
+                closeAuthModal();
+                
+                // Показываем форму входа
+                showAuthModal('login');
+            }, 3000);
+        } else {
+            errorElement.textContent = data.message || 'Ошибка при создании пользователя';
+        }
+    } catch (error) {
+        console.error('Ошибка при создании пользователя:', error);
+        errorElement.textContent = 'Произошла ошибка при создании пользователя';
+    }
+}
+
+// Показ модального окна профиля
+function showProfileModal() {
+    if (!currentUser) {
+        showAuthModal('login');
+        return;
+    }
+    
+    // Заполняем форму профиля данными пользователя
+    document.getElementById('profileName').value = currentUser.name;
+    document.getElementById('profileAbout').value = currentUser.about;
+    
+    // Устанавливаем роль пользователя
+    const roleInputs = document.querySelectorAll('input[name="profileWho"]');
+    for (const input of roleInputs) {
+        if (input.value === currentUser.role) {
+            input.checked = true;
+            break;
+        }
+    }
+    
+    // Показываем модальное окно
+    profileModal.style.display = 'flex';
+}
+
+// Сохранение профиля пользователя
+async function saveUserProfile() {
+    if (!currentUser) {
+        return;
+    }
+    
+    const name = document.getElementById('profileName').value.trim();
+    const about = document.getElementById('profileAbout').value.trim();
+    const roleInputs = document.querySelectorAll('input[name="profileWho"]');
+    let role = 'student';
+    
+    for (const input of roleInputs) {
+        if (input.checked) {
+            role = input.value;
+            break;
+        }
+    }
+    
+    const errorElement = document.getElementById('profileError');
+    
+    // Очищаем сообщение об ошибке
+    errorElement.textContent = '';
+    
+    // Проверка введенных данных
+    if (!name) {
+        errorElement.textContent = 'Введите имя';
+        return;
+    }
+    
+    try {
+        // Отправляем запрос на обновление профиля
+        const response = await fetch('/update_user_profile', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                token: currentUser.token,
+                name: name,
+                about: about,
+                who: role
+            })
+        });
+        
+        const data = await response.json();
+        
+        if (data.status === 'success') {
+            // Обновляем данные пользователя
+            currentUser.name = name;
+            currentUser.about = about;
+            currentUser.role = role;
+            
+            // Обновляем UI
+            document.getElementById('userDisplayName').textContent = name;
+            
+            // Закрываем модальное окно
+            profileModal.style.display = 'none';
+        } else {
+            errorElement.textContent = data.message || 'Ошибка при обновлении профиля';
+        }
+    } catch (error) {
+        console.error('Ошибка при обновлении профиля:', error);
+        errorElement.textContent = 'Произошла ошибка при обновлении профиля';
+    }
+}
+
+// Выход из системы
+function logout() {
+    // Удаляем токен
+    localStorage.removeItem('userToken');
+    
+    // Очищаем данные пользователя
+    currentUser = null;
+    
+    // Обновляем UI
+    updateUIForUnauthenticatedUser();
+    
+    // Закрываем модальное окно профиля
+    profileModal.style.display = 'none';
+}
 
 // Инициализация модального окна с тегами
 function initModal() {
@@ -122,25 +660,63 @@ function toggleTag(tag, element) {
 // Фильтрация тегов по поисковому запросу
 function filterTags() {
     const searchText = document.getElementById('tagSearch').value.toLowerCase();
-    const tagElements = document.querySelectorAll('.tag-pill');
+    const searchResults = document.getElementById('searchResults');
     
-    let visibleCategories = new Set();
+    if (searchText.length < 2) {
+        // Если поисковый запрос слишком короткий, скрываем результаты поиска
+        searchResults.style.display = 'none';
+        document.getElementById('modalCategories').style.display = 'flex';
+        return;
+    }
     
-    tagElements.forEach(element => {
-        const tag = element.textContent.toLowerCase();
-        if (tag.includes(searchText)) {
-            element.style.display = 'inline-block';
-            visibleCategories.add(element.closest('.category-tags'));
-        } else {
-            element.style.display = 'none';
-        }
-    });
+    // Получаем выбранную категорию
+    const selectedCategory = document.getElementById('selectedCategory').dataset.category;
+    if (!selectedCategory || !allTags[selectedCategory]) {
+        return;
+    }
     
-    // Показываем/скрываем категории в зависимости от видимости тегов
-    document.querySelectorAll('.category-tags').forEach(category => {
-        const hasVisibleTags = Array.from(category.querySelectorAll('.tag-pill')).some(tag => tag.style.display !== 'none');
-        category.style.display = hasVisibleTags ? 'block' : 'none';
-    });
+    // Очищаем результаты поиска
+    searchResults.innerHTML = '';
+    let foundTags = 0;
+    
+    // Ищем совпадения только в тегах выбранной категории
+    for (const [subcategory, tags] of Object.entries(allTags[selectedCategory])) {
+        tags.forEach(tag => {
+            if (tag.toLowerCase().includes(searchText)) {
+                // Создаем элемент для найденного тега
+                const tagElement = document.createElement('div');
+                tagElement.className = `available-tag ${selectedTags.has(tag) ? 'selected' : ''}`;
+                tagElement.dataset.tag = tag;
+                tagElement.textContent = tag;
+                tagElement.addEventListener('click', () => toggleTagSelection(tagElement, tag));
+                
+                // Добавляем подкатегорию как дополнительную информацию
+                const subcategorySpan = document.createElement('small');
+                subcategorySpan.textContent = ` (${subcategory})`;
+                subcategorySpan.style.opacity = '0.7';
+                subcategorySpan.style.marginLeft = '4px';
+                tagElement.appendChild(subcategorySpan);
+                
+                // Добавляем элемент в результаты поиска
+                searchResults.appendChild(tagElement);
+                foundTags++;
+            }
+        });
+    }
+    
+    // Показываем результаты поиска, если найдены совпадения
+    if (foundTags > 0) {
+        searchResults.style.display = 'flex';
+        document.getElementById('modalCategories').style.display = 'none';
+    } else {
+        // Если тегов не найдено, показываем сообщение об этом
+        const noTagsMessage = document.createElement('div');
+        noTagsMessage.className = 'no-tags-message';
+        noTagsMessage.textContent = 'Теги не найдены';
+        searchResults.appendChild(noTagsMessage);
+        searchResults.style.display = 'flex';
+        document.getElementById('modalCategories').style.display = 'none';
+    }
 }
 
 // Добавление тега
@@ -148,6 +724,8 @@ function addTag(tagName) {
     if (!selectedTags.has(tagName)) {
         selectedTags.add(tagName);
         renderTags();
+        // Обновляем профили
+        updateProfileCards();
     }
 }
 
@@ -158,10 +736,12 @@ function removeTag(tagName) {
         renderTags();
         
         // Обновляем отображение в модальном окне, если оно открыто
-        const tagElement = document.querySelector(`.tag-pill[data-tag="${tagName}"]`);
-        if (tagElement) {
-            tagElement.classList.remove('selected');
-        }
+        const tagElements = document.querySelectorAll(`.available-tag`);
+        tagElements.forEach(element => {
+            if (element.textContent.includes(tagName)) {
+                element.classList.remove('selected');
+            }
+        });
         
         // Обновляем профили
         updateProfileCards();
@@ -177,6 +757,10 @@ function renderTags() {
     }
     tagsContainer.innerHTML = '';
     
+    // Получаем выбранную категорию
+    const selectedCategory = document.getElementById('selectedCategory').dataset.category;
+    const categoryClass = selectedCategory ? `category-${selectedCategory.replace(/\s+/g, '_')}` : '';
+    
     if (selectedTags.size === 0) {
         tagsContainer.innerHTML = '<p class="no-tags">Нет выбранных тегов</p>';
         return;
@@ -184,7 +768,7 @@ function renderTags() {
     
     selectedTags.forEach(tag => {
         const tagElement = document.createElement('span');
-        tagElement.className = 'tag';
+        tagElement.className = `tag ${categoryClass}`;
         tagElement.textContent = tag;
         
         const removeBtn = document.createElement('span');
@@ -226,57 +810,96 @@ document.getElementById('userInput').addEventListener('keypress', (event) => {
 
 async function extractTags() {
     const userInput = document.getElementById('userInput').value.trim();
-    const loadingDiv = document.getElementById('loading');
-    const errorDiv = document.getElementById('error');
-    const selectedCategoryDiv = document.getElementById('selectedCategory');
-    const categoryText = selectedCategoryDiv.querySelector('.category-text');
-    const tagsContainer = selectedCategoryDiv.querySelector('.tags-container');
-
-    loadingDiv.style.display = 'block';
-    selectedCategoryDiv.classList.remove('visible');
-    tagsContainer.classList.remove('visible');
-    errorDiv.style.display = 'none';
-
+    const errorElement = document.getElementById('error');
+    const resultElement = document.getElementById('result');
+    const loadingElement = document.getElementById('loading');
+    const selectedCategoryElement = document.getElementById('selectedCategory');
+    const tagsContainer = document.querySelector('.tags-container');
+    
+    if (!userInput) {
+        errorElement.textContent = 'Пожалуйста, введите текст для извлечения тегов.';
+        errorElement.style.display = 'block';
+        return;
+    }
+    
     try {
+        // Скрываем сообщение об ошибке
+        errorElement.style.display = 'none';
+        
+        // Показываем индикатор загрузки
+        loadingElement.style.display = 'flex';
+        
+        // Скрываем область результатов
+        resultElement.style.display = 'none';
+        
+        // Скрываем выбранную категорию и контейнер тегов во время поиска
+        selectedCategoryElement.classList.remove('visible');
+        if (tagsContainer) {
+            tagsContainer.classList.remove('visible');
+        }
+        
         const response = await fetch('/extract_tags', {
             method: 'POST',
             headers: {
-                'Content-Type': 'application/json',
+                'Content-Type': 'application/json'
             },
             body: JSON.stringify({ user_input: userInput })
         });
-
+        
         if (!response.ok) {
             throw new Error('Ошибка при извлечении тегов');
         }
-
-        const data = await response.json();
-        loadingDiv.style.display = 'none';
-
-        // Update category display
-        const category = data.main_category.replace(/\s+/g, '_');
-        selectedCategoryDiv.className = `selected-category category-${category} visible`;
-        categoryText.textContent = data.main_category;
-        selectedCategoryDiv.dataset.category = data.main_category;
-
-        // Clear existing tags
-        selectedTags.clear();
-        renderTags();
-
-        // Add new tags
-        const tags = data.tags.split(',').map(tag => tag.trim());
-        tags.forEach(tag => {
-            if (tag) addTag(tag);
-        });
-
-        tagsContainer.classList.add('visible');
         
-        // Обновляем профили на основе извлеченных тегов
-        updateProfileCards();
+        const data = await response.json();
+        
+        if (data.error) {
+            throw new Error(data.error);
+        }
+        
+        // Очищаем ранее выбранные теги
+        selectedTags.clear();
+        
+        // Обрабатываем извлеченные теги, если они есть
+        if (data.tags) {
+            // Убираем возможные пробелы и разбиваем строку по запятым
+            const tagsList = data.tags.split(',').map(tag => tag.trim()).filter(tag => tag.length > 0);
+            
+            // Устанавливаем категорию и делаем ее видимой
+            const mainCategory = data.main_category || 'Разное';
+            selectedCategoryElement.dataset.category = mainCategory;
+            document.querySelector('.category-text').textContent = mainCategory;
+            selectedCategoryElement.classList.add('visible');
+            
+            // Показываем контейнер тегов
+            if (tagsContainer) {
+                tagsContainer.classList.add('visible');
+            }
+            
+            // Добавляем извлеченные теги в набор выбранных
+            tagsList.forEach(tag => {
+                selectedTags.add(tag);
+            });
+            
+            // Обновляем отображение тегов
+            renderTags();
+            
+            // Обновляем отображение профилей
+            updateProfileCards();
+        }
+        
+        // Скрываем индикатор загрузки
+        loadingElement.style.display = 'none';
     } catch (error) {
-        loadingDiv.style.display = 'none';
-        errorDiv.textContent = error.message;
-        errorDiv.style.display = 'block';
+        console.error('Ошибка при извлечении тегов:', error);
+        errorElement.textContent = error.message || 'Произошла ошибка при извлечении тегов';
+        errorElement.style.display = 'block';
+        loadingElement.style.display = 'none';
+        
+        // В случае ошибки тоже скрываем контейнер категории и тегов
+        selectedCategoryElement.classList.remove('visible');
+        if (tagsContainer) {
+            tagsContainer.classList.remove('visible');
+        }
     }
 }
 
@@ -289,6 +912,7 @@ document.getElementById('changeCategoryBtn').addEventListener('click', async fun
     const loadingDiv = document.getElementById('loading');
     const resultDiv = document.getElementById('result');
     const errorDiv = document.getElementById('error');
+    const tagsContainer = document.querySelector('.tags-container');
     
     if (!userInput) {
         alert('Пожалуйста, введите текст для анализа');
@@ -327,9 +951,15 @@ document.getElementById('changeCategoryBtn').addEventListener('click', async fun
             resultDiv.style.display = 'none';
             errorDiv.style.display = 'none';
             
+            // Скрываем выбранную категорию и контейнер тегов во время обработки
+            selectedCategoryDiv.classList.remove('visible');
+            if (tagsContainer) {
+                tagsContainer.classList.remove('visible');
+            }
+            
             // Update category text immediately
             const newCategoryClass = category.replace(/\s+/g, '_');
-            selectedCategoryDiv.className = `selected-category category-${newCategoryClass} visible`;
+            selectedCategoryDiv.className = `selected-category category-${newCategoryClass}`;
             categoryText.textContent = category;
             selectedCategoryDiv.dataset.category = category;
             
@@ -362,6 +992,12 @@ document.getElementById('changeCategoryBtn').addEventListener('click', async fun
                     if (tag) addTag(tag);
                 });
                 
+                // Показываем выбранную категорию и контейнер тегов
+                selectedCategoryDiv.classList.add('visible');
+                if (tagsContainer) {
+                    tagsContainer.classList.add('visible');
+                }
+                
                 resultDiv.style.display = 'block';
                 
                 // Обновляем профили на основе извлеченных тегов
@@ -370,6 +1006,12 @@ document.getElementById('changeCategoryBtn').addEventListener('click', async fun
                 loadingDiv.style.display = 'none';
                 errorDiv.textContent = error.message;
                 errorDiv.style.display = 'block';
+                
+                // В случае ошибки оставляем контейнеры скрытыми
+                selectedCategoryDiv.classList.remove('visible');
+                if (tagsContainer) {
+                    tagsContainer.classList.remove('visible');
+                }
             }
         });
         categoryList.appendChild(categoryBtn);
@@ -388,191 +1030,90 @@ document.getElementById('changeCategoryBtn').addEventListener('click', async fun
     });
 });
 
-// Tag interaction handlers
-document.addEventListener('DOMContentLoaded', function() {
-    const tagsContainer = document.querySelector('.tags-container');
-    const tags = document.querySelector('.tags');
-    const addTagBtn = document.querySelector('.add-tag-btn');
-    const modal = document.getElementById('tagsModal');
-    const closeBtn = document.querySelector('.close-btn');
-    const tagSearch = document.getElementById('tagSearch');
-    const modalCategories = document.getElementById('modalCategories');
-    
-    // Handle tag removal
-    tags.addEventListener('click', function(e) {
-        if (e.target.classList.contains('tag-remove')) {
-            const tag = e.target.closest('.tag');
-            tag.remove();
-        }
-    });
-    
-    // Handle add tag button
-    addTagBtn.addEventListener('click', function() {
-        const selectedCategory = document.getElementById('selectedCategory').dataset.category;
-        if (!selectedCategory) {
-            alert('Сначала извлеките теги из текста');
-            return;
-        }
-        
-        // Clear previous content
-        modalCategories.innerHTML = '';
-        
-        // Get subcategories and their tags
-        const subcategories = allTags[selectedCategory];
-        
-        // Create subcategory sections
-        for (const [subcategory, tags] of Object.entries(subcategories)) {
-            const subcategoryDiv = document.createElement('div');
-            subcategoryDiv.className = 'subcategory-section';
-            
-            const subcategoryTitle = document.createElement('h3');
-            subcategoryTitle.className = 'subcategory-title';
-            subcategoryTitle.textContent = subcategory;
-            subcategoryDiv.appendChild(subcategoryTitle);
-            
-            const tagsContainer = document.createElement('div');
-            tagsContainer.className = 'subcategory-tags';
-            
-            // Create tag elements for this subcategory
-            tags.forEach(tag => {
-                const tagElement = document.createElement('div');
-                tagElement.className = 'tag-pill';
-                tagElement.textContent = tag;
-                tagElement.dataset.tag = tag;
-                if (selectedTags.has(tag)) {
-                    tagElement.classList.add('selected');
-                }
-                tagElement.addEventListener('click', function() {
-                    toggleTag(tag, this);
-                });
-                tagsContainer.appendChild(tagElement);
-            });
-            
-            subcategoryDiv.appendChild(tagsContainer);
-            modalCategories.appendChild(subcategoryDiv);
-        }
-        
-        modal.style.display = 'block';
-    });
-    
-    // Close modal
-    closeBtn.addEventListener('click', function() {
-        modal.style.display = 'none';
-    });
-    
-    // Close modal when clicking outside
-    window.addEventListener('click', function(e) {
-        if (e.target === modal) {
-            modal.style.display = 'none';
-        }
-    });
-    
-    // Search functionality
-    tagSearch.addEventListener('input', function() {
-        const searchText = this.value.toLowerCase();
-        const tagPills = modalCategories.querySelectorAll('.tag-pill');
-        
-        tagPills.forEach(tag => {
-            const tagText = tag.textContent.toLowerCase();
-            tag.style.display = tagText.includes(searchText) ? 'inline-block' : 'none';
-        });
-    });
-});
-
 function showTagsModal() {
-    const modal = document.getElementById('tagsModal');
-    const modalCategories = document.getElementById('modalCategories');
-    const searchResults = document.getElementById('searchResults');
-    const tagSearch = document.getElementById('tagSearch');
+    // Получаем выбранную категорию из атрибута data-category элемента #selectedCategory
+    const selectedCategory = document.getElementById('selectedCategory').dataset.category;
     
-    // Clear previous content
+    if (!selectedCategory) {
+        // Если категория не выбрана, показываем сообщение
+        alert('Сначала извлеките теги из текста, чтобы определить категорию');
+        return;
+    }
+    
+    // Очищаем содержимое модального окна
+    const modalCategories = document.getElementById('modalCategories');
     modalCategories.innerHTML = '';
-    searchResults.innerHTML = '';
-    searchResults.style.display = 'none';
+    
+    // Получаем список подкатегорий для выбранной категории
+    const subcategories = allTags[selectedCategory];
+    
+    if (!subcategories) {
+        console.error(`Подкатегории для категории ${selectedCategory} не найдены`);
+        return;
+    }
+    
+    // Устанавливаем заголовок модального окна
+    const modalTitle = modal.querySelector('h2');
+    modalTitle.textContent = `Выберите теги: ${selectedCategory}`;
+    
+    // Создаем разделы для каждой подкатегории
+    for (const [subcategory, tags] of Object.entries(subcategories)) {
+        const subcategorySection = document.createElement('div');
+        subcategorySection.className = `category-section category-${selectedCategory.replace(/\s+/g, '_')}`;
+        
+        const subcategoryTitle = document.createElement('h3');
+        subcategoryTitle.textContent = subcategory;
+        subcategorySection.appendChild(subcategoryTitle);
+        
+        const tagsContainer = document.createElement('div');
+        tagsContainer.className = 'available-tags';
+        
+        // Добавляем теги для данной подкатегории
+        tags.forEach(tag => {
+            const tagElement = document.createElement('div');
+            tagElement.className = `available-tag ${selectedTags.has(tag) ? 'selected' : ''}`;
+            tagElement.textContent = tag;
+            tagElement.dataset.tag = tag;
+            tagElement.addEventListener('click', () => toggleTagSelection(tagElement, tag));
+            tagsContainer.appendChild(tagElement);
+        });
+        
+        subcategorySection.appendChild(tagsContainer);
+        modalCategories.appendChild(subcategorySection);
+    }
+    
+    // Сбрасываем поле поиска
+    const tagSearch = document.getElementById('tagSearch');
     tagSearch.value = '';
     
-    // Show all available tags by category
-    for (const [category, subcategories] of Object.entries(tags_hierarchy)) {
-        const categorySection = document.createElement('div');
-        categorySection.className = 'category-section';
-        
-        const categoryTitle = document.createElement('h3');
-        categoryTitle.textContent = category;
-        categorySection.appendChild(categoryTitle);
-        
-        const availableTags = document.createElement('div');
-        availableTags.className = 'available-tags';
-        
-        // Collect all tags from subcategories
-        const allTags = [];
-        for (const tags of Object.values(subcategories)) {
-            allTags.push(...tags);
-        }
-        
-        // Create tag elements
-        allTags.forEach(tag => {
-            const tagElement = document.createElement('div');
-            tagElement.className = 'available-tag';
-            tagElement.textContent = tag;
-            tagElement.onclick = () => toggleTagSelection(tagElement, tag);
-            
-            // Add category-specific styling
-            const categoryClass = category.replace(/\s+/g, '_');
-            tagElement.classList.add(`category-${categoryClass}`);
-            
-            availableTags.appendChild(tagElement);
-        });
-        
-        categorySection.appendChild(availableTags);
-        modalCategories.appendChild(categorySection);
-    }
+    // Привязываем обработчик события input к полю поиска
+    tagSearch.removeEventListener('input', filterTags);
+    tagSearch.addEventListener('input', filterTags);
     
-    // Handle search
-    tagSearch.oninput = (e) => {
-        const searchTerm = e.target.value.toLowerCase();
-        if (searchTerm.length < 2) {
-            searchResults.style.display = 'none';
-            modalCategories.style.display = 'grid';
-            return;
-        }
-        
-        searchResults.innerHTML = '';
-        searchResults.style.display = 'flex';
-        modalCategories.style.display = 'none';
-        
-        // Search through all tags
-        for (const [category, subcategories] of Object.entries(tags_hierarchy)) {
-            for (const tags of Object.values(subcategories)) {
-                tags.forEach(tag => {
-                    if (tag.toLowerCase().includes(searchTerm)) {
-                        const tagElement = document.createElement('div');
-                        tagElement.className = 'available-tag';
-                        tagElement.textContent = tag;
-                        tagElement.onclick = () => toggleTagSelection(tagElement, tag);
-                        
-                        // Add category-specific styling
-                        const categoryClass = category.replace(/\s+/g, '_');
-                        tagElement.classList.add(`category-${categoryClass}`);
-                        
-                        searchResults.appendChild(tagElement);
-                    }
-                });
-            }
-        }
-    };
+    // Скрываем результаты поиска
+    document.getElementById('searchResults').style.display = 'none';
     
-    modal.style.display = 'block';
+    // Показываем модальное окно
+    modal.style.display = 'flex';
 }
 
+// Функция для переключения выбора тега
 function toggleTagSelection(tagElement, tagName) {
-    const isSelected = tagElement.classList.contains('selected');
-    if (isSelected) {
+    if (selectedTags.has(tagName)) {
+        // Удаляем тег, если он уже выбран
+        selectedTags.delete(tagName);
         tagElement.classList.remove('selected');
-        removeTag(tagName);
     } else {
+        // Добавляем тег, если он еще не выбран
+        selectedTags.add(tagName);
         tagElement.classList.add('selected');
-        addTag(tagName);
     }
+    
+    // Обновляем отображение выбранных тегов
+    renderTags();
+    
+    // Обновляем профили специалистов
+    updateProfileCards();
 }
 
 // Profile data
@@ -769,4 +1310,743 @@ function updateProfileCards() {
 }
 
 // Initialize profile cards
-renderProfileCards(); 
+renderProfileCards();
+
+// Класс для работы с API сервера
+class ApiClient {
+    // Метод для входа в систему
+    async login(telegramUsername, password) {
+        try {
+            const response = await fetch('/login', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    telegram_username: telegramUsername,
+                    password: password
+                })
+            });
+
+            const data = await response.json();
+            
+            if (!response.ok) {
+                throw new Error(data.message || 'Ошибка при входе в систему');
+            }
+
+            return data;
+        } catch (error) {
+            console.error('Ошибка при входе:', error);
+            throw error;
+        }
+    }
+
+    // Метод для создания запроса на подтверждение
+    async createConfirmationRequest(telegramUsername) {
+        try {
+            const response = await fetch('/create_confirmation_request', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    telegram_username: telegramUsername
+                })
+            });
+
+            if (!response.ok) {
+                const errorData = await response.json();
+                throw new Error(errorData.message || 'Ошибка при создании запроса на подтверждение');
+            }
+
+            return await response.json();
+        } catch (error) {
+            console.error('Ошибка при создании запроса:', error);
+            throw error;
+        }
+    }
+
+    // Метод для проверки статуса подтверждения
+    async checkConfirmationStatus(telegramUsername) {
+        try {
+            const response = await fetch('/check_confirmation_status', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    telegram_username: telegramUsername
+                })
+            });
+
+            if (!response.ok) {
+                const errorData = await response.json();
+                throw new Error(errorData.message || 'Ошибка при проверке статуса подтверждения');
+            }
+
+            return await response.json();
+        } catch (error) {
+            console.error('Ошибка при проверке статуса:', error);
+            throw error;
+        }
+    }
+
+    // Метод для создания пользователя
+    async createUser(telegramUsername, password) {
+        try {
+            const response = await fetch('/create_user', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    telegram_username: telegramUsername,
+                    password: password
+                })
+            });
+
+            if (!response.ok) {
+                const errorData = await response.json();
+                throw new Error(errorData.message || 'Ошибка при создании пользователя');
+            }
+
+            return await response.json();
+        } catch (error) {
+            console.error('Ошибка при создании пользователя:', error);
+            throw error;
+        }
+    }
+    
+    // Метод для получения профиля пользователя
+    async getUserProfile(userId) {
+        try {
+            const response = await fetch('/get_user_profile', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    user_id: userId
+                })
+            });
+            
+            const data = await response.json();
+            
+            if (!response.ok) {
+                throw new Error(data.message || 'Ошибка при получении профиля пользователя');
+            }
+
+            return data;
+        } catch (error) {
+            console.error('Ошибка при получении профиля:', error);
+            throw error;
+        }
+    }
+    
+    // Метод для обновления профиля пользователя
+    async updateUserProfile(userId, profileData) {
+        try {
+            const response = await fetch('/update_user_profile', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    user_id: userId,
+                    name: profileData.name,
+                    about: profileData.about,
+                    who: profileData.who
+                })
+            });
+            
+            const data = await response.json();
+            
+            if (!response.ok) {
+                throw new Error(data.message || 'Ошибка при обновлении профиля пользователя');
+            }
+
+            return data;
+        } catch (error) {
+            console.error('Ошибка при обновлении профиля:', error);
+            throw error;
+        }
+    }
+}
+
+// Создаем экземпляр API клиента
+const apiClient = new ApiClient();
+
+// Управление регистрацией
+const registration = {
+    currentStep: 1,
+    data: {
+        telegramUsername: '',
+        password: ''
+    },
+    statusCheckInterval: null,
+
+    // Инициализация процесса регистрации
+    init() {
+        // Обработчик для иконки профиля
+        const profileIcon = document.getElementById('profileIcon');
+        const registerModal = document.getElementById('registerModal');
+        
+        if (profileIcon && registerModal) {
+            profileIcon.addEventListener('click', () => {
+                registerModal.style.display = 'block';
+                // По умолчанию показываем форму входа
+                this.showLoginForm();
+            });
+        }
+
+        // Закрытие модального окна
+        const closeButtons = document.querySelectorAll('.close-btn[data-modal="registerModal"]');
+        closeButtons.forEach(button => {
+            button.addEventListener('click', () => {
+                registerModal.style.display = 'none';
+                // Останавливаем опрос статуса
+                if (this.statusCheckInterval) {
+                    clearInterval(this.statusCheckInterval);
+                    this.statusCheckInterval = null;
+                }
+            });
+        });
+
+        // Обработчики для вкладок входа и регистрации
+        document.getElementById('loginTab').addEventListener('click', () => this.showLoginForm());
+        document.getElementById('registerTab').addEventListener('click', () => this.showRegisterForm());
+        
+        // Обработчик для кнопки входа
+        document.getElementById('loginButton').addEventListener('click', () => this.processLogin());
+
+        // Обработчики для кнопок шагов регистрации
+        document.getElementById('nextStep1').addEventListener('click', () => this.processStep1());
+        document.getElementById('prevStep2').addEventListener('click', () => this.showStep(1));
+        document.getElementById('prevStep3').addEventListener('click', () => this.showStep(2));
+        document.getElementById('completeRegistration').addEventListener('click', () => this.completeRegistration());
+        document.getElementById('closeRegistration').addEventListener('click', () => {
+            registerModal.style.display = 'none';
+            if (this.statusCheckInterval) {
+                clearInterval(this.statusCheckInterval);
+                this.statusCheckInterval = null;
+            }
+        });
+
+        // Клик вне модального окна
+        window.addEventListener('click', (event) => {
+            if (event.target === registerModal) {
+                registerModal.style.display = 'none';
+                if (this.statusCheckInterval) {
+                    clearInterval(this.statusCheckInterval);
+                    this.statusCheckInterval = null;
+                }
+            }
+        });
+    },
+    
+    // Показать форму входа
+    showLoginForm() {
+        // Активируем вкладку входа
+        document.getElementById('loginTab').classList.add('active');
+        document.getElementById('registerTab').classList.remove('active');
+        
+        // Показываем форму входа, скрываем форму регистрации
+        document.getElementById('loginForm').classList.add('active');
+        document.getElementById('registrationForm').classList.remove('active');
+    },
+    
+    // Показать форму регистрации
+    showRegisterForm() {
+        // Активируем вкладку регистрации
+        document.getElementById('loginTab').classList.remove('active');
+        document.getElementById('registerTab').classList.add('active');
+        
+        // Показываем форму регистрации, скрываем форму входа
+        document.getElementById('loginForm').classList.remove('active');
+        document.getElementById('registrationForm').classList.add('active');
+        
+        // Показываем первый шаг регистрации
+        this.showStep(1);
+    },
+    
+    // Обработка входа в систему
+    async processLogin() {
+        const telegramInput = document.getElementById('loginTelegram');
+        const passwordInput = document.getElementById('loginPassword');
+        
+        const telegramUsername = telegramInput.value.trim();
+        const password = passwordInput.value;
+        
+        if (!telegramUsername) {
+            this.showError(telegramInput, 'Введите имя пользователя в Telegram');
+            return;
+        }
+        
+        if (!password) {
+            this.showError(passwordInput, 'Введите пароль');
+            return;
+        }
+        
+        try {
+            // Показываем индикатор загрузки
+            this.showLoading(true);
+            
+            // Отправляем запрос на вход через API
+            const result = await apiClient.login(telegramUsername, password);
+            
+            // Скрываем индикатор загрузки
+            this.showLoading(false);
+            
+            if (result.status === 'success') {
+                // Получаем профиль пользователя
+                const profileData = await apiClient.getUserProfile(result.user.id);
+                
+                // Сохраняем информацию о пользователе в localStorage
+                localStorage.setItem('user', JSON.stringify({
+                    id: result.user.id,
+                    telegram_username: result.user.telegram_username,
+                    name: profileData.user.name || '',
+                    about: profileData.user.about || '',
+                    who: profileData.user.who || '',
+                    isLoggedIn: true
+                }));
+                
+                // Закрываем модальное окно
+                document.getElementById('registerModal').style.display = 'none';
+                
+                // Обновляем обработчики иконки профиля
+                updateProfileIconHandler();
+                
+                // Показываем сообщение об успешном входе
+                alert('Вы успешно вошли в систему!');
+            } else {
+                throw new Error(result.message || 'Ошибка при входе');
+            }
+        } catch (error) {
+            this.showLoading(false);
+            this.showError(passwordInput, error.message || 'Неверное имя пользователя или пароль');
+        }
+    },
+
+    // Показать определенный шаг регистрации
+    showStep(stepNumber) {
+        const steps = document.querySelectorAll('.registration-step');
+        steps.forEach(step => {
+            step.classList.remove('active');
+        });
+        
+        document.getElementById(`step${stepNumber}`).classList.add('active');
+        this.currentStep = stepNumber;
+    },
+
+    // Обработка шага 1
+    async processStep1() {
+        const telegramInput = document.getElementById('telegramUsername');
+        const telegramUsername = telegramInput.value.trim();
+        
+        if (!telegramUsername) {
+            this.showError(telegramInput, 'Укажите имя пользователя в Telegram');
+            return;
+        }
+        
+        try {
+            // Запускаем индикатор загрузки
+            this.showLoading(true);
+            
+            // Создаем запрос на подтверждение
+            await apiClient.createConfirmationRequest(telegramUsername);
+            
+            // Сохраняем имя пользователя
+            this.data.telegramUsername = telegramUsername;
+            
+            // Обновляем текст в шаге 2
+            const botInstructions = document.querySelector('.bot-instructions');
+            if (botInstructions) {
+                botInstructions.innerHTML = `
+                    <p>Мы отправили запрос на подтверждение регистрации.</p>
+                    <ol>
+                        <li>Перейдите в Telegram и найдите бота <a href="https://t.me/TREOSCOMPANY_bot" target="_blank">@TREOSCOMPANY_bot</a></li>
+                        <li>Отправьте боту ваш ник: <strong>${telegramUsername}</strong></li>
+                        <li>Подтвердите запрос на регистрацию, нажав на кнопку "Принять"</li>
+                    </ol>
+                    <p>После подтверждения эта страница автоматически перейдет к следующему шагу.</p>
+                `;
+            }
+            
+            // Скрываем индикатор загрузки
+            this.showLoading(false);
+            
+            // Переходим к шагу 2
+            this.showStep(2);
+            
+            // Запускаем периодическую проверку статуса подтверждения
+            this.startStatusCheck(telegramUsername);
+            
+        } catch (error) {
+            this.showLoading(false);
+            this.showError(telegramInput, error.message || 'Ошибка при создании запроса на подтверждение');
+        }
+    },
+
+    // Начать периодическую проверку статуса подтверждения
+    startStatusCheck(telegramUsername) {
+        // Остановим предыдущий интервал, если он был
+        if (this.statusCheckInterval) {
+            clearInterval(this.statusCheckInterval);
+        }
+        
+        // Запускаем проверку статуса каждые 2 секунды
+        this.statusCheckInterval = setInterval(async () => {
+            try {
+                const response = await apiClient.checkConfirmationStatus(telegramUsername);
+                
+                // Если статус "принято", переходим к шагу 3
+                if (response.confirmation_status === 'accepted') {
+                    clearInterval(this.statusCheckInterval);
+                    this.statusCheckInterval = null;
+                    
+                    // Переходим к шагу 3
+                    this.showStep(3);
+                }
+                // Если статус "отклонено", показываем ошибку
+                else if (response.confirmation_status === 'rejected') {
+                    clearInterval(this.statusCheckInterval);
+                    this.statusCheckInterval = null;
+                    
+                    const telegramInput = document.getElementById('telegramUsername');
+                    this.showError(telegramInput, 'Запрос на регистрацию был отклонен.');
+                    
+                    // Возвращаемся к шагу 1
+                    this.showStep(1);
+                }
+                // Иначе продолжаем проверку
+            } catch (error) {
+                console.error('Ошибка при проверке статуса:', error);
+                // Не останавливаем проверку при ошибках
+            }
+        }, 2000);
+    },
+
+    // Показать/скрыть индикатор загрузки
+    showLoading(show) {
+        const loadingElement = document.getElementById('loading');
+        if (loadingElement) {
+            loadingElement.style.display = show ? 'block' : 'none';
+        }
+    },
+
+    // Завершение регистрации
+    async completeRegistration() {
+        const passwordInput = document.getElementById('password');
+        const confirmPasswordInput = document.getElementById('confirmPassword');
+        
+        const password = passwordInput.value;
+        const confirmPassword = confirmPasswordInput.value;
+        
+        if (password.length < 8) {
+            this.showError(passwordInput, 'Пароль должен быть не менее 8 символов');
+            return;
+        }
+        
+        if (password !== confirmPassword) {
+            this.showError(confirmPasswordInput, 'Пароли не совпадают');
+            return;
+        }
+        
+        try {
+            // Показываем индикатор загрузки
+            this.showLoading(true);
+            
+            // Создаем пользователя через API
+            const result = await apiClient.createUser(this.data.telegramUsername, password);
+            
+            if (result.status === 'success') {
+                // Установим базовые данные для профиля (пустые значения)
+                await apiClient.updateUserProfile(result.user.id, {
+                    name: '',
+                    about: '',
+                    who: 'student' // По умолчанию устанавливаем статус "студент"
+                });
+                
+                // Сохраняем информацию о пользователе в localStorage
+                localStorage.setItem('user', JSON.stringify({
+                    id: result.user.id,
+                    telegram_username: this.data.telegramUsername,
+                    name: '',
+                    about: '',
+                    who: 'student',
+                    isLoggedIn: true
+                }));
+                
+                // Обновляем обработчики иконки профиля
+                updateProfileIconHandler();
+                
+                // Переходим к шагу 4 (успешная регистрация)
+                this.showStep(4);
+            } else {
+                throw new Error(result.message || 'Ошибка при создании пользователя');
+            }
+        } catch (error) {
+            this.showError(passwordInput, error.message || 'Ошибка при регистрации');
+        } finally {
+            // Скрываем индикатор загрузки
+            this.showLoading(false);
+        }
+    },
+
+    // Показать ошибку для поля ввода
+    showError(inputElement, message) {
+        // Добавляем класс ошибки к полю
+        inputElement.classList.add('error-input');
+        
+        // Создаем или обновляем сообщение об ошибке
+        let errorElement = inputElement.nextElementSibling;
+        if (!errorElement || !errorElement.classList.contains('error-message')) {
+            errorElement = document.createElement('p');
+            errorElement.className = 'error-message';
+            inputElement.parentNode.insertBefore(errorElement, inputElement.nextSibling);
+        }
+        
+        errorElement.textContent = message;
+        
+        // Убираем ошибку при вводе
+        inputElement.addEventListener('input', function() {
+            this.classList.remove('error-input');
+            if (errorElement) {
+                errorElement.textContent = '';
+            }
+        }, { once: true });
+    }
+};
+
+// Создадим функцию для инициализации бота
+async function createTelegramBot() {
+    const botName = 'TREOSCOMPANY_bot';
+    
+    console.log(`Бот @${botName} настроен`);
+    console.log('В реальном проекте бот должен быть настроен на серверной стороне');
+}
+
+// Вызываем инициализацию регистрации после загрузки страницы
+document.addEventListener('DOMContentLoaded', () => {
+    // Проверяем, авторизован ли пользователь и обновляем обработчики иконки профиля
+    updateProfileIconHandler();
+
+    // Инициализируем процесс регистрации
+    registration.init();
+    
+    // Создаем бота (имитация)
+    createTelegramBot();
+    
+    // Обработчики профиля
+    initProfileHandlers();
+});
+
+// Функция для открытия модального окна логина/регистрации
+function showLoginModal() {
+    document.getElementById('registerModal').style.display = 'block';
+    // По умолчанию показываем форму входа
+    registration.showLoginForm();
+}
+
+// Функция для открытия модального окна профиля
+async function showProfileModal() {
+    // Проверяем, авторизован ли пользователь
+    const userData = localStorage.getItem('user');
+    
+    if (!userData) {
+        // Если пользователь не авторизован, показываем окно входа
+        showLoginModal();
+        return;
+    }
+    
+    // Парсим данные пользователя
+    const user = JSON.parse(userData);
+    
+    if (!user || !user.isLoggedIn) {
+        // Если пользователь не авторизован, показываем окно входа
+        showLoginModal();
+        return;
+    }
+    
+    // Если пользователь авторизован, показываем профиль
+    const profileModal = document.getElementById('profileModal');
+    profileModal.style.display = 'block';
+    
+    if (user.id) {
+        // Показываем индикатор загрузки
+        const loadingElement = document.getElementById('loading');
+        if (loadingElement) loadingElement.style.display = 'block';
+        
+        try {
+            // Получаем данные профиля с сервера
+            const profileData = await apiClient.getUserProfile(user.id);
+            
+            // Заполняем поля формы
+            document.getElementById('profileName').value = profileData.user.name || '';
+            document.getElementById('profileAbout').value = profileData.user.about || '';
+            
+            // Устанавливаем радиокнопку
+            const who = profileData.user.who || '';
+            const radioButtons = document.querySelectorAll('input[name="profileWho"]');
+            radioButtons.forEach(radio => {
+                if (radio.value === who) {
+                    radio.checked = true;
+                }
+            });
+        } catch (error) {
+            console.error('Ошибка при загрузке профиля:', error);
+        } finally {
+            // Скрываем индикатор загрузки
+            if (loadingElement) loadingElement.style.display = 'none';
+        }
+    }
+}
+
+// Инициализация обработчиков для модального окна профиля
+function initProfileHandlers() {
+    // Закрытие модального окна профиля
+    const closeProfileBtn = document.querySelector('.close-btn[data-modal="profileModal"]');
+    if (closeProfileBtn) {
+        closeProfileBtn.addEventListener('click', () => {
+            document.getElementById('profileModal').style.display = 'none';
+        });
+    }
+    
+    // Клик вне модального окна профиля
+    window.addEventListener('click', (event) => {
+        const profileModal = document.getElementById('profileModal');
+        if (event.target === profileModal) {
+            profileModal.style.display = 'none';
+        }
+    });
+    
+    // Сохранение профиля
+    const saveProfileBtn = document.getElementById('saveProfileButton');
+    if (saveProfileBtn) {
+        saveProfileBtn.addEventListener('click', saveUserProfile);
+    }
+    
+    // Выход из системы
+    const logoutBtn = document.getElementById('logoutButton');
+    if (logoutBtn) {
+        logoutBtn.addEventListener('click', logout);
+    }
+    
+    // Назначаем обработчики на иконку профиля в зависимости от состояния авторизации
+    updateProfileIconHandler();
+}
+
+// Обновление обработчика иконки профиля
+function updateProfileIconHandler() {
+    const profileIcon = document.getElementById('profileIcon');
+    if (!profileIcon) return;
+    
+    // Удаляем существующие обработчики
+    profileIcon.removeEventListener('click', showLoginModal);
+    profileIcon.removeEventListener('click', showProfileModal);
+    
+    // Проверяем статус авторизации
+    const userData = localStorage.getItem('user');
+    let isLoggedIn = false;
+    
+    if (userData) {
+        try {
+            const user = JSON.parse(userData);
+            isLoggedIn = user && user.isLoggedIn;
+            
+            if (isLoggedIn) {
+                // Если пользователь авторизован, добавляем класс logged-in
+                profileIcon.classList.add('logged-in');
+            } else {
+                // Если пользователь не авторизован, удаляем класс logged-in
+                profileIcon.classList.remove('logged-in');
+            }
+        } catch (e) {
+            console.error('Ошибка при проверке авторизации:', e);
+            localStorage.removeItem('user');
+        }
+    } else {
+        // Если данных пользователя нет, удаляем класс logged-in
+        profileIcon.classList.remove('logged-in');
+    }
+    
+    // Назначаем соответствующий обработчик
+    if (isLoggedIn) {
+        profileIcon.addEventListener('click', showProfileModal);
+    } else {
+        profileIcon.addEventListener('click', showLoginModal);
+    }
+}
+
+// Сохранение профиля пользователя
+async function saveUserProfile() {
+    // Получаем данные пользователя из хранилища
+    const userData = JSON.parse(localStorage.getItem('user'));
+    
+    if (!userData || !userData.id) {
+        alert('Необходимо войти в систему для сохранения профиля.');
+        return;
+    }
+    
+    // Получаем значения полей
+    const name = document.getElementById('profileName').value;
+    const about = document.getElementById('profileAbout').value;
+    let who = '';
+    
+    // Получаем выбранное значение радиокнопки
+    const radioButtons = document.querySelectorAll('input[name="profileWho"]');
+    radioButtons.forEach(radio => {
+        if (radio.checked) {
+            who = radio.value;
+        }
+    });
+    
+    // Показываем индикатор загрузки
+    const loadingElement = document.getElementById('loading');
+    if (loadingElement) loadingElement.style.display = 'block';
+    
+    try {
+        // Отправляем данные на сервер
+        const result = await apiClient.updateUserProfile(userData.id, {
+            name: name,
+            about: about,
+            who: who
+        });
+        
+        if (result.status === 'success') {
+            alert('Профиль успешно обновлен!');
+            
+            // Обновляем данные в хранилище
+            userData.name = name;
+            userData.about = about;
+            userData.who = who;
+            localStorage.setItem('user', JSON.stringify(userData));
+            
+            // Закрываем модальное окно
+            document.getElementById('profileModal').style.display = 'none';
+        } else {
+            throw new Error(result.message || 'Ошибка при обновлении профиля');
+        }
+    } catch (error) {
+        console.error('Ошибка при сохранении профиля:', error);
+        alert('Произошла ошибка при сохранении профиля. Пожалуйста, попробуйте еще раз.');
+    } finally {
+        // Скрываем индикатор загрузки
+        if (loadingElement) loadingElement.style.display = 'none';
+    }
+}
+
+// Выход из системы
+function logout() {
+    // Удаляем данные пользователя из хранилища
+    localStorage.removeItem('user');
+    
+    // Обновляем обработчики иконки профиля
+    updateProfileIconHandler();
+    
+    // Закрываем модальное окно профиля
+    document.getElementById('profileModal').style.display = 'none';
+    
+    alert('Вы вышли из системы');
+} 

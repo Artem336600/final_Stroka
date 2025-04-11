@@ -10,6 +10,32 @@
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
 </head>
 <body>
+    <!-- Панель навигации с иконкой профиля -->
+    <div class="navbar">
+        <div class="logo">
+            <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"/>
+                <line x1="7" y1="7" x2="7.01" y2="7"/>
+            </svg>
+            <span>TagMaster</span>
+        </div>
+        <div class="profile-section">
+            <div id="userAuthSection" class="auth-buttons">
+                <button id="loginButton" class="login-btn">Войти</button>
+                <button id="registerButton" class="register-btn">Регистрация</button>
+            </div>
+            <div id="userProfileSection" class="user-profile" style="display: none;">
+                <div id="profileIcon" class="profile-icon">
+                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path>
+                        <circle cx="12" cy="7" r="4"></circle>
+                    </svg>
+                    <span id="userDisplayName">Пользователь</span>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <div class="container">
         <h1>Извлечение тегов из текста</h1>
         <div class="input-container">
@@ -28,7 +54,7 @@
             </div>
         </div>
         
-        <div id="loading" class="loading">
+        <div id="loading" class="loading" style="display: none;">
             <div class="spinner"></div>
             <p>Обработка запроса...</p>
         </div>
@@ -58,6 +84,157 @@
             <input type="text" id="tagSearch" placeholder="Поиск тегов...">
             <div id="searchResults" class="search-results" style="display: none;"></div>
             <div id="modalCategories" class="modal-categories"></div>
+        </div>
+    </div>
+
+    <!-- Modal для авторизации -->
+    <div id="authModal" class="modal">
+        <div class="modal-content auth-modal">
+            <span class="close-btn" data-modal="authModal">&times;</span>
+            
+            <!-- Выбор между входом и регистрацией -->
+            <div class="auth-selector">
+                <div class="auth-tabs">
+                    <button id="loginTab" class="auth-tab active">Вход</button>
+                    <button id="registerTab" class="auth-tab">Регистрация</button>
+                </div>
+            </div>
+            
+            <!-- Форма входа -->
+            <div id="loginForm" class="auth-form active">
+                <h2>Вход в систему</h2>
+                <div class="form-group">
+                    <label for="loginTelegram">Имя пользователя в Telegram</label>
+                    <input type="text" id="loginTelegram" placeholder="Например: @username">
+                </div>
+                <div class="form-group">
+                    <label for="loginPassword">Пароль</label>
+                    <input type="password" id="loginPassword" placeholder="Введите пароль">
+                </div>
+                <div id="loginError" class="form-error"></div>
+                <button id="loginSubmitButton" class="complete-btn">Войти</button>
+            </div>
+            
+            <!-- Форма регистрации (шаги) -->
+            <div id="registrationForm" class="auth-form">
+                <div class="registration-steps">
+                    <!-- Шаг 1: Ввод ника в Telegram -->
+                    <div id="step1" class="registration-step active">
+                        <h2>Шаг 1: Укажите ваш Telegram</h2>
+                        <div class="form-group">
+                            <label for="telegramUsername">Имя пользователя в Telegram</label>
+                            <input type="text" id="telegramUsername" placeholder="Например: @username">
+                            <p class="form-hint">Укажите ваше имя пользователя в Telegram для регистрации</p>
+                        </div>
+                        <div id="step1Error" class="form-error"></div>
+                        <button id="nextStep1" class="next-step-btn">Продолжить</button>
+                    </div>
+                    
+                    <!-- Шаг 2: Подтверждение в Telegram -->
+                    <div id="step2" class="registration-step">
+                        <h2>Шаг 2: Подтвердите запрос в Telegram</h2>
+                        <div class="bot-instructions">
+                            <p>Для продолжения регистрации:</p>
+                            <ol>
+                                <li>Перейдите в Telegram и найдите бота <a href="https://t.me/TREOSCOMPANY_bot" target="_blank">@TREOSCOMPANY_bot</a></li>
+                                <li>Отправьте боту ваш ник в Telegram</li>
+                                <li>Подтвердите запрос на регистрацию, нажав на кнопку "Принять"</li>
+                            </ol>
+                            <p>После подтверждения эта страница автоматически перейдет к следующему шагу.</p>
+                            <div class="waiting-confirmation">
+                                <div class="spinner small-spinner"></div>
+                                <p>Ожидание подтверждения...</p>
+                            </div>
+                        </div>
+                        <div class="step-buttons">
+                            <button id="prevStep2" class="prev-step-btn">Назад</button>
+                        </div>
+                    </div>
+                    
+                    <!-- Шаг 3: Создание пароля -->
+                    <div id="step3" class="registration-step">
+                        <h2>Шаг 3: Создайте пароль</h2>
+                        <div class="form-group">
+                            <label for="password">Пароль</label>
+                            <input type="password" id="password" placeholder="Введите пароль">
+                            <p class="form-hint">Минимум 8 символов, включая буквы и цифры</p>
+                        </div>
+                        <div class="form-group">
+                            <label for="confirmPassword">Подтверждение пароля</label>
+                            <input type="password" id="confirmPassword" placeholder="Повторите пароль">
+                        </div>
+                        <div id="step3Error" class="form-error"></div>
+                        <div class="step-buttons">
+                            <button id="prevStep3" class="prev-step-btn">Назад</button>
+                            <button id="completeRegistration" class="complete-btn">Завершить регистрацию</button>
+                        </div>
+                    </div>
+                    
+                    <!-- Шаг 4: Регистрация завершена -->
+                    <div id="step4" class="registration-step">
+                        <div class="registration-success">
+                            <svg class="checkmark" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 52 52">
+                                <circle class="checkmark-circle" cx="26" cy="26" r="25" fill="none"/>
+                                <path class="checkmark-check" fill="none" d="M14.1 27.2l7.1 7.2 16.7-16.8"/>
+                            </svg>
+                            <h2>Регистрация успешно завершена!</h2>
+                            <p>Теперь вы можете пользоваться всеми возможностями сервиса.</p>
+                            <button id="closeRegistration" class="close-registration-btn">Закрыть</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Modal для профиля пользователя -->
+    <div id="profileModal" class="modal">
+        <div class="modal-content profile-modal">
+            <span class="close-btn" data-modal="profileModal">&times;</span>
+            <div class="profile-header">
+                <div class="profile-avatar">
+                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="48" height="48" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path>
+                        <circle cx="12" cy="7" r="4"></circle>
+                    </svg>
+                </div>
+                <h2>Мой профиль</h2>
+                <button id="logoutButton" class="logout-btn">
+                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path>
+                        <polyline points="16 17 21 12 16 7"></polyline>
+                        <line x1="21" y1="12" x2="9" y2="12"></line>
+                    </svg>
+                    Выйти
+                </button>
+            </div>
+            
+            <div id="profileForm">
+                <div class="form-group">
+                    <label for="profileName">Имя</label>
+                    <input type="text" id="profileName" placeholder="Введите ваше имя">
+                </div>
+                
+                <div class="form-group">
+                    <label for="profileAbout">О себе</label>
+                    <textarea id="profileAbout" placeholder="Расскажите о себе" rows="4"></textarea>
+                </div>
+                
+                <div class="form-group">
+                    <label>Кто вы</label>
+                    <div class="radio-group">
+                        <label class="radio-label">
+                            <input type="radio" name="profileWho" value="student"> Студент
+                        </label>
+                        <label class="radio-label">
+                            <input type="radio" name="profileWho" value="teacher"> Преподаватель
+                        </label>
+                    </div>
+                </div>
+                
+                <div id="profileError" class="form-error"></div>
+                <button id="saveProfileButton" class="complete-btn">Сохранить</button>
+            </div>
         </div>
     </div>
 
