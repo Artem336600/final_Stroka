@@ -1,9 +1,45 @@
 let allTags = {};
-let selectedTags = new Set();
+let selectedTags = [];
 let modal;
 let authModal;
 let profileModal;
 let currentUser = null;
+
+// Иерархический словарь тегов
+const tags_hierarchy = {
+    "Образование": {
+        "Наука": ["Астрономия", "Биология", "Химия", "Физика", "Математика", "Психология", "Медицина", "Нейробиология", "Генетика", "Экология", "Квантовая механика", "Космос"],
+        "Программирование": ["Python", "JavaScript", "Java", "C++", "Web-разработка", "Мобильная разработка", "Базы данных", "Алгоритмы", "Машинное обучение"],
+        "Языки": ["Английский", "Испанский", "Французский", "Немецкий", "Китайский", "Японский", "Корейский"],
+        "Гуманитарные науки": ["История", "Философия", "Литература", "Искусствоведение", "Культурология", "Социология"]
+    },
+    "Развлечения": {
+        "Искусство": ["Живопись", "Фотография", "Скульптура", "Архитектура", "Рисование", "Графика", "Театр", "Кино", "Анимация", "Стрит-арт"],
+        "Музыка": ["Рок", "Поп", "Классическая", "Джаз", "Электронная", "Хип-хоп", "Металл", "Инди", "Фолк", "Блюз", "R&B", "Кантри"],
+        "Игры": ["Настольные игры", "Видеоигры", "Карточные игры", "Головоломки", "Стратегии", "Ролевые игры"],
+        "Медиа": ["Кино", "Сериалы", "Аниме", "Комиксы", "Подкасты", "Блоги", "Стриминг"]
+    },
+    "Спорт и Активный отдых": {
+        "Спорт": ["Футбол", "Баскетбол", "Теннис", "Плавание", "Йога", "Бег", "Фитнес", "Велоспорт", "Боевые искусства", "Лыжи", "Сноуборд"],
+        "Активный отдых": ["Туризм", "Кемпинг", "Альпинизм", "Рыбалка", "Охота", "Серфинг", "Дайвинг", "Парапланеризм"],
+        "Экстремальные виды": ["Скейтбординг", "BMX", "Паркур", "Скалолазание", "Рафтинг", "Бейсджампинг"]
+    },
+    "Технологии": {
+        "IT": ["Программирование", "Искусственный интеллект", "Веб-разработка", "Мобильные приложения", "Кибербезопасность", "Блокчейн"],
+        "Гаджеты": ["Смартфоны", "Ноутбуки", "Планшеты", "Умные часы", "VR/AR устройства", "Дроны"],
+        "Инновации": ["Робототехника", "Виртуальная реальность", "Дополненная реальность", "IoT", "3D печать", "Биотехнологии"]
+    },
+    "Образ жизни": {
+        "Здоровье": ["Фитнес", "Питание", "Медитация", "Йога", "Психология", "Здоровый сон"],
+        "Мода": ["Одежда", "Аксессуары", "Красота", "Косметика", "Стиль", "Модные тренды"],
+        "Дом": ["Интерьер", "Садоводство", "Ремонт", "DIY", "Организация пространства", "Декор"]
+    },
+    "Кулинария": {
+        "Кухни мира": ["Итальянская", "Японская", "Мексиканская", "Индийская", "Французская", "Китайская"],
+        "Типы блюд": ["Выпечка", "Десерты", "Супы", "Салаты", "Горячие блюда", "Закуски"],
+        "Специальное питание": ["Вегетарианство", "Веганство", "Безглютеновое", "Кето", "Палео", "Сыроедение"]
+    }
+};
 
 // Загружаем теги при инициализации страницы
 window.addEventListener('DOMContentLoaded', async () => {
@@ -61,51 +97,69 @@ window.addEventListener('DOMContentLoaded', async () => {
 
 // Проверка аутентификации пользователя
 async function checkUserAuthentication() {
-    // Получаем токен из localStorage
-    const token = localStorage.getItem('userToken');
+    // Получаем данные пользователя из localStorage
+    const userData = localStorage.getItem('user');
     
-    if (token) {
+    if (userData) {
         try {
-            // Получаем данные профиля
-            const response = await fetch('/get_user_profile', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json'
-                },
-                body: JSON.stringify({ token })
-            });
+            const user = JSON.parse(userData);
             
-            if (response.ok) {
-                const data = await response.json();
-                if (data.status === 'success') {
-                    // Устанавливаем текущего пользователя
-                    currentUser = {
-                        token,
-                        telegram: data.user.tg,
-                        name: data.user.name || data.user.tg,
-                        role: data.user.who || 'student',
-                        about: data.user.about || ''
+            if (user && user.id && user.isLoggedIn) {
+                // Получаем данные профиля
+                const profileData = await apiClient.getUserProfile(user.id);
+                
+                if (profileData.status === 'success') {
+                    // Обновляем UI для авторизованного пользователя
+                    const currentUser = {
+                        id: user.id,
+                        telegram: profileData.user.telegram_username,
+                        name: profileData.user.name || profileData.user.telegram_username,
+                        about: profileData.user.about || '',
+                        role: profileData.user.who || 'student',
+                        university: profileData.user.university || '',
+                        work: profileData.user.work || '',
+                        age: profileData.user.age || '',
+                        tags: profileData.user.tags || []
                     };
                     
-                    // Обновляем UI для авторизованного пользователя
-                    updateUIForAuthenticatedUser();
+                    // Обновляем данные в localStorage
+                    localStorage.setItem('user', JSON.stringify({
+                        ...user,
+                        name: currentUser.name,
+                        about: currentUser.about,
+                        who: currentUser.role,
+                        university: currentUser.university,
+                        work: currentUser.work,
+                        age: currentUser.age,
+                        tags: currentUser.tags
+                    }));
+                    
+                    // Обновляем UI
+                    document.getElementById('userAuthSection').style.display = 'none';
+                    document.getElementById('userProfileSection').style.display = 'flex';
+                    document.getElementById('userDisplayName').textContent = currentUser.name;
                 } else {
-                    // Если произошла ошибка, очищаем токен
-                    localStorage.removeItem('userToken');
-                    updateUIForUnauthenticatedUser();
+                    // Если произошла ошибка, очищаем данные пользователя
+                    localStorage.removeItem('user');
+                    document.getElementById('userAuthSection').style.display = 'flex';
+                    document.getElementById('userProfileSection').style.display = 'none';
                 }
             } else {
-                // Если произошла ошибка, очищаем токен
-                localStorage.removeItem('userToken');
-                updateUIForUnauthenticatedUser();
+                // Если нет id или пользователь не залогинен
+                localStorage.removeItem('user');
+                document.getElementById('userAuthSection').style.display = 'flex';
+                document.getElementById('userProfileSection').style.display = 'none';
             }
         } catch (error) {
             console.error('Ошибка при проверке аутентификации:', error);
-            localStorage.removeItem('userToken');
-            updateUIForUnauthenticatedUser();
+            localStorage.removeItem('user');
+            document.getElementById('userAuthSection').style.display = 'flex';
+            document.getElementById('userProfileSection').style.display = 'none';
         }
     } else {
-        updateUIForUnauthenticatedUser();
+        // Если нет данных пользователя
+        document.getElementById('userAuthSection').style.display = 'flex';
+        document.getElementById('userProfileSection').style.display = 'none';
     }
 }
 
@@ -141,7 +195,6 @@ function initAuthHandlers() {
     // Кнопки в навигационной панели
     document.getElementById('loginButton').addEventListener('click', () => showAuthModal('login'));
     document.getElementById('registerButton').addEventListener('click', () => showAuthModal('register'));
-    document.getElementById('profileIcon').addEventListener('click', showProfileModal);
     
     // Переключение вкладок внутри формы авторизации
     document.getElementById('loginTab').addEventListener('click', () => switchAuthTab('login'));
@@ -180,6 +233,9 @@ function initAuthHandlers() {
     
     // Закрытие модальных окон при клике вне их области
     window.addEventListener('click', (event) => {
+        const authModal = document.getElementById('authModal');
+        const profileModal = document.getElementById('profileModal');
+        
         if (event.target === authModal) {
             authModal.style.display = 'none';
         }
@@ -266,6 +322,10 @@ async function handleLogin() {
     }
     
     try {
+        // Показываем индикатор загрузки
+        const loadingElement = document.getElementById('loading');
+        if (loadingElement) loadingElement.style.display = 'block';
+        
         // Отправляем запрос на сервер
         const response = await fetch('/login', {
             method: 'POST',
@@ -281,29 +341,46 @@ async function handleLogin() {
         const data = await response.json();
         
         if (data.status === 'success') {
-            // Сохраняем токен
-            localStorage.setItem('userToken', data.token);
+            // Получаем профиль пользователя
+            const profileData = await apiClient.getUserProfile(data.user.id);
             
-            // Устанавливаем данные пользователя
-            currentUser = {
-                token: data.token,
-                telegram: telegramUsername,
-                name: data.user?.name || telegramUsername,
-                role: data.user?.who || 'student',
-                about: data.user?.about || ''
-            };
+            // Сохраняем информацию о пользователе в localStorage
+            localStorage.setItem('user', JSON.stringify({
+                id: data.user.id,
+                telegram_username: telegramUsername,
+                name: profileData.user.name || telegramUsername,
+                about: profileData.user.about || '',
+                who: profileData.user.who || 'student',
+                university: profileData.user.university || '',
+                work: profileData.user.work || '',
+                age: profileData.user.age || '',
+                tags: profileData.user.tags || [],
+                isLoggedIn: true
+            }));
             
-            // Обновляем UI
-            updateUIForAuthenticatedUser();
+            // Обновляем обработчики иконки профиля
+            updateProfileIconHandler();
+            
+            // Обновляем имя пользователя в навигационной панели
+            document.getElementById('userDisplayName').textContent = profileData.user.name || telegramUsername;
+            
+            // Обновляем видимость элементов интерфейса
+            document.getElementById('userAuthSection').style.display = 'none';
+            document.getElementById('userProfileSection').style.display = 'flex';
             
             // Закрываем модальное окно
-            closeAuthModal();
+            const authModal = document.getElementById('authModal');
+            if (authModal) authModal.style.display = 'none';
         } else {
             errorElement.textContent = data.message || 'Ошибка при входе в систему';
         }
     } catch (error) {
         console.error('Ошибка при входе:', error);
         errorElement.textContent = 'Произошла ошибка при входе в систему';
+    } finally {
+        // Скрываем индикатор загрузки
+        const loadingElement = document.getElementById('loading');
+        if (loadingElement) loadingElement.style.display = 'none';
     }
 }
 
@@ -456,107 +533,352 @@ async function finishRegistration() {
 
 // Показ модального окна профиля
 function showProfileModal() {
-    if (!currentUser) {
-        showAuthModal('login');
-        return;
-    }
+    const profileModal = document.getElementById('profileModal');
+    if (!profileModal) return;
     
-    // Заполняем форму профиля данными пользователя
-    document.getElementById('profileName').value = currentUser.name;
-    document.getElementById('profileAbout').value = currentUser.about;
+    // Показываем модальное окно
+    profileModal.style.display = 'block';
     
-    // Устанавливаем роль пользователя
-    const roleInputs = document.querySelectorAll('input[name="profileWho"]');
-    for (const input of roleInputs) {
-        if (input.value === currentUser.role) {
-            input.checked = true;
-            break;
+    // Получаем данные пользователя из localStorage
+    const userData = JSON.parse(localStorage.getItem('user'));
+    
+    if (userData) {
+        // Заполняем поля формы данными пользователя
+        document.getElementById('profileName').value = userData.name || '';
+        document.getElementById('profileAbout').value = userData.about || '';
+        document.getElementById('profileUniversity').value = userData.university || '';
+        document.getElementById('profileWork').value = userData.work || '';
+        document.getElementById('profileAge').value = userData.age || '';
+        
+        // Устанавливаем выбранную категорию (студент/преподаватель)
+        const radioButtons = document.querySelectorAll('input[name="profileWho"]');
+        radioButtons.forEach(radio => {
+            radio.checked = radio.value === (userData.who || 'student');
+        });
+        
+        // Обновляем список выбранных тегов
+        const selectedTagsContainer = document.getElementById('profileSelectedTags');
+        selectedTagsContainer.innerHTML = '';
+        
+        if (userData.tags && Array.isArray(userData.tags)) {
+            userData.tags.forEach(tag => {
+                const tagElement = document.createElement('span');
+                tagElement.className = 'tag';
+                tagElement.textContent = tag;
+                
+                const removeButton = document.createElement('span');
+                removeButton.className = 'remove-tag';
+                removeButton.innerHTML = '&times;';
+                removeButton.addEventListener('click', function() {
+                    tagElement.remove();
+                });
+                
+                tagElement.appendChild(removeButton);
+                selectedTagsContainer.appendChild(tagElement);
+            });
         }
     }
     
+    // Назначаем обработчик для кнопки выбора тегов
+    const tagsButton = document.getElementById('profileTagsButton');
+    if (tagsButton) {
+        tagsButton.addEventListener('click', showTagsSelectorModal);
+    }
+}
+
+// Функция для показа модального окна выбора тегов для профиля
+function showTagsSelectorModal(event) {
+    // Предотвращаем всплытие события клика
+    if (event) event.stopPropagation();
+    
+    // Получаем модальное окно тегов
+    const tagsModal = document.getElementById('tagsModal');
+    if (!tagsModal) return;
+    
+    // Устанавливаем флаг, что выбор для профиля
+    tagsModal.dataset.forProfile = 'true';
+    
+    // Сбрасываем поле поиска
+    const tagSearchInput = document.getElementById('tagSearch');
+    if (tagSearchInput) tagSearchInput.value = '';
+    
+    // Скрываем результаты поиска
+    const searchResults = document.getElementById('searchResults');
+    if (searchResults) searchResults.style.display = 'none';
+    
     // Показываем модальное окно
-    profileModal.style.display = 'flex';
+    tagsModal.style.display = 'block';
+    
+    // Загружаем категории и теги
+    loadTagsForModal();
+}
+
+// Функция для загрузки категорий и тегов в модальное окно
+function loadTagsForModal() {
+    const modalCategories = document.getElementById('modalCategories');
+    if (!modalCategories) return;
+    
+    // Очищаем текущее содержимое
+    modalCategories.innerHTML = '';
+    
+    // Здесь можно загрузить категории и теги с сервера
+    // Для примера используем предопределенный набор
+    const categories = [
+        { name: 'Программирование', tags: ['JavaScript', 'Python', 'Java', 'C++', 'PHP', 'Ruby', 'Swift'] },
+        { name: 'Дизайн', tags: ['UI/UX', 'Графический дизайн', 'Веб-дизайн', 'Иллюстрация', 'Анимация'] },
+        { name: 'Маркетинг', tags: ['SMM', 'Контент-маркетинг', 'Email-маркетинг', 'SEO', 'Аналитика'] },
+        { name: 'Образование', tags: ['Преподавание', 'Онлайн-курсы', 'Репетиторство', 'Школа', 'Университет'] }
+    ];
+    
+    // Создаем элементы для каждой категории и ее тегов
+    categories.forEach(category => {
+        const categoryElement = document.createElement('div');
+        categoryElement.className = 'modal-category';
+        
+        const categoryTitle = document.createElement('h3');
+        categoryTitle.textContent = category.name;
+        categoryElement.appendChild(categoryTitle);
+        
+        const tagsContainer = document.createElement('div');
+        tagsContainer.className = 'modal-tags';
+        
+        category.tags.forEach(tag => {
+            const tagElement = document.createElement('span');
+            tagElement.className = 'modal-tag';
+            tagElement.textContent = tag;
+            
+            // Проверяем, выбран ли уже такой тег в профиле
+            const selectedTags = document.querySelectorAll('#profileSelectedTags .tag');
+            const isSelected = Array.from(selectedTags).some(el => el.textContent.trim() === tag);
+            
+            if (isSelected) {
+                tagElement.classList.add('selected');
+            }
+            
+            // Добавляем обработчик клика на тег
+            tagElement.addEventListener('click', function(event) {
+                // Предотвращаем всплытие события
+                event.stopPropagation();
+                
+                const isForProfile = document.getElementById('tagsModal').dataset.forProfile === 'true';
+                
+                if (isForProfile) {
+                    // Если для профиля, то добавляем/удаляем тег из списка выбранных
+                    const selectedTagsContainer = document.getElementById('profileSelectedTags');
+                    
+                    if (tagElement.classList.contains('selected')) {
+                        // Удаляем тег из профиля
+                        tagElement.classList.remove('selected');
+                        
+                        // Находим и удаляем соответствующий тег из контейнера
+                        const tags = selectedTagsContainer.querySelectorAll('.tag');
+                        tags.forEach(t => {
+                            if (t.textContent.trim() === tag) {
+                                t.remove();
+                            }
+                        });
+                    } else {
+                        // Добавляем тег в профиль
+                        tagElement.classList.add('selected');
+                        
+                        const tagElementForProfile = document.createElement('span');
+                        tagElementForProfile.className = 'tag';
+                        tagElementForProfile.textContent = tag;
+                        
+                        const removeButton = document.createElement('span');
+                        removeButton.className = 'remove-tag';
+                        removeButton.innerHTML = '&times;';
+                        removeButton.addEventListener('click', function(evt) {
+                            evt.stopPropagation(); // Предотвращаем всплытие события
+                            tagElementForProfile.remove();
+                            
+                            // Также убираем выделение в модальном окне, если оно открыто
+                            const modalTags = document.querySelectorAll('.modal-tag');
+                            modalTags.forEach(mt => {
+                                if (mt.textContent.trim() === tag) {
+                                    mt.classList.remove('selected');
+                                }
+                            });
+                        });
+                        
+                        tagElementForProfile.appendChild(removeButton);
+                        selectedTagsContainer.appendChild(tagElementForProfile);
+                    }
+                }
+            });
+            
+            tagsContainer.appendChild(tagElement);
+        });
+        
+        categoryElement.appendChild(tagsContainer);
+        modalCategories.appendChild(categoryElement);
+    });
+}
+
+// Инициализация обработчиков для модального окна тегов
+function initTagsModal() {
+    const tagsModal = document.getElementById('tagsModal');
+    if (!tagsModal) return;
+    
+    const closeBtn = tagsModal.querySelector('.close-btn');
+    
+    // Закрытие модального окна при клике на крестик
+    if (closeBtn) {
+        closeBtn.addEventListener('click', function(event) {
+            event.stopPropagation(); // Предотвращаем всплытие события
+            tagsModal.style.display = 'none';
+            tagsModal.dataset.forProfile = 'false';
+        });
+    }
+    
+    // Закрытие модального окна при клике вне его
+    tagsModal.addEventListener('click', function(event) {
+        if (event.target === tagsModal) {
+            event.stopPropagation(); // Предотвращаем всплытие события
+            tagsModal.style.display = 'none';
+            tagsModal.dataset.forProfile = 'false';
+        }
+    });
+    
+    // Поиск тегов
+    const tagSearchInput = document.getElementById('tagSearch');
+    const searchResults = document.getElementById('searchResults');
+    
+    if (tagSearchInput && searchResults) {
+        tagSearchInput.addEventListener('input', function() {
+            const searchTerm = this.value.trim().toLowerCase();
+            
+            if (searchTerm.length < 2) {
+                searchResults.style.display = 'none';
+                return;
+            }
+            
+            // Очищаем результаты поиска
+            searchResults.innerHTML = '';
+            
+            // Ищем теги, содержащие поисковый запрос
+            const allTags = document.querySelectorAll('.modal-tag');
+            const matchingTags = Array.from(allTags).filter(tag => 
+                tag.textContent.toLowerCase().includes(searchTerm)
+            );
+            
+            if (matchingTags.length > 0) {
+                matchingTags.forEach(tag => {
+                    const tagCopy = document.createElement('span');
+                    tagCopy.className = 'search-tag';
+                    tagCopy.textContent = tag.textContent;
+                    
+                    if (tag.classList.contains('selected')) {
+                        tagCopy.classList.add('selected');
+                    }
+                    
+                    tagCopy.addEventListener('click', function(event) {
+                        event.stopPropagation(); // Предотвращаем всплытие события
+                        // Имитируем клик по оригинальному тегу
+                        tag.click();
+                        
+                        // Обновляем состояние копии
+                        tagCopy.classList.toggle('selected');
+                    });
+                    
+                    searchResults.appendChild(tagCopy);
+                });
+                
+                searchResults.style.display = 'block';
+            } else {
+                searchResults.innerHTML = '<p>Ничего не найдено</p>';
+                searchResults.style.display = 'block';
+            }
+        });
+    }
 }
 
 // Сохранение профиля пользователя
 async function saveUserProfile() {
-    if (!currentUser) {
+    // Получаем данные пользователя из хранилища
+    const userData = JSON.parse(localStorage.getItem('user'));
+    
+    if (!userData || !userData.id) {
+        alert('Необходимо войти в систему для сохранения профиля.');
         return;
     }
     
-    const name = document.getElementById('profileName').value.trim();
-    const about = document.getElementById('profileAbout').value.trim();
-    const roleInputs = document.querySelectorAll('input[name="profileWho"]');
-    let role = 'student';
+    // Получаем значения полей
+    const name = document.getElementById('profileName').value;
+    const about = document.getElementById('profileAbout').value;
+    const university = document.getElementById('profileUniversity').value;
+    const work = document.getElementById('profileWork').value;
+    const age = document.getElementById('profileAge').value ? parseInt(document.getElementById('profileAge').value) : null;
     
-    for (const input of roleInputs) {
-        if (input.checked) {
-            role = input.value;
-            break;
+    // Получаем выбранные теги из контейнера
+    const tagsElements = document.querySelectorAll('#profileSelectedTags .tag');
+    const tags = Array.from(tagsElements).map(tag => tag.textContent);
+    
+    let who = '';
+    
+    // Получаем выбранное значение радиокнопки
+    const radioButtons = document.querySelectorAll('input[name="profileWho"]');
+    radioButtons.forEach(radio => {
+        if (radio.checked) {
+            who = radio.value;
         }
-    }
+    });
     
-    const errorElement = document.getElementById('profileError');
-    
-    // Очищаем сообщение об ошибке
-    errorElement.textContent = '';
-    
-    // Проверка введенных данных
-    if (!name) {
-        errorElement.textContent = 'Введите имя';
-        return;
-    }
+    // Показываем индикатор загрузки
+    const loadingElement = document.getElementById('loading');
+    if (loadingElement) loadingElement.style.display = 'block';
     
     try {
-        // Отправляем запрос на обновление профиля
-        const response = await fetch('/update_user_profile', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json'
-            },
-            body: JSON.stringify({
-                token: currentUser.token,
-                name: name,
-                about: about,
-                who: role
-            })
+        // Отправляем данные на сервер
+        const result = await apiClient.updateUserProfile(userData.id, {
+            name: name,
+            about: about,
+            who: who,
+            university: university,
+            work: work,
+            age: age,
+            tags: tags
         });
         
-        const data = await response.json();
-        
-        if (data.status === 'success') {
-            // Обновляем данные пользователя
-            currentUser.name = name;
-            currentUser.about = about;
-            currentUser.role = role;
+        if (result.status === 'success') {
+            alert('Профиль успешно обновлен!');
             
-            // Обновляем UI
-            document.getElementById('userDisplayName').textContent = name;
+            // Обновляем данные в хранилище
+            userData.name = name;
+            userData.about = about;
+            userData.who = who;
+            userData.university = university;
+            userData.work = work;
+            userData.age = age;
+            userData.tags = tags;
+            localStorage.setItem('user', JSON.stringify(userData));
             
             // Закрываем модальное окно
-            profileModal.style.display = 'none';
+            document.getElementById('profileModal').style.display = 'none';
         } else {
-            errorElement.textContent = data.message || 'Ошибка при обновлении профиля';
+            throw new Error(result.message || 'Ошибка при обновлении профиля');
         }
     } catch (error) {
-        console.error('Ошибка при обновлении профиля:', error);
-        errorElement.textContent = 'Произошла ошибка при обновлении профиля';
+        console.error('Ошибка при сохранении профиля:', error);
+        alert('Произошла ошибка при сохранении профиля. Пожалуйста, попробуйте еще раз.');
+    } finally {
+        // Скрываем индикатор загрузки
+        if (loadingElement) loadingElement.style.display = 'none';
     }
 }
 
 // Выход из системы
 function logout() {
-    // Удаляем токен
-    localStorage.removeItem('userToken');
+    // Удаляем данные пользователя из хранилища
+    localStorage.removeItem('user');
     
-    // Очищаем данные пользователя
-    currentUser = null;
-    
-    // Обновляем UI
-    updateUIForUnauthenticatedUser();
+    // Обновляем обработчики иконки профиля
+    updateProfileIconHandler();
     
     // Закрываем модальное окно профиля
-    profileModal.style.display = 'none';
+    document.getElementById('profileModal').style.display = 'none';
+    
+    alert('Вы вышли из системы');
 }
 
 // Инициализация модального окна с тегами
@@ -601,7 +923,7 @@ function initModal() {
                 tagElement.dataset.tag = tag;
                 
                 // Отмечаем уже выбранные теги
-                if (selectedTags.has(tag)) {
+                if (selectedTags.includes(tag)) {
                     tagElement.classList.add('selected');
                 }
                 
@@ -642,11 +964,12 @@ function initModal() {
 
 // Переключение выбора тега
 function toggleTag(tag, element) {
-    if (selectedTags.has(tag)) {
-        selectedTags.delete(tag);
+    const index = selectedTags.indexOf(tag);
+    if (index !== -1) {
+        selectedTags.splice(index, 1); // Удаляем элемент из массива
         element.classList.remove('selected');
     } else {
-        selectedTags.add(tag);
+        selectedTags.push(tag); // Добавляем элемент в массив
         element.classList.add('selected');
     }
     
@@ -685,7 +1008,7 @@ function filterTags() {
             if (tag.toLowerCase().includes(searchText)) {
                 // Создаем элемент для найденного тега
                 const tagElement = document.createElement('div');
-                tagElement.className = `available-tag ${selectedTags.has(tag) ? 'selected' : ''}`;
+                tagElement.className = `available-tag ${selectedTags.includes(tag) ? 'selected' : ''}`;
                 tagElement.dataset.tag = tag;
                 tagElement.textContent = tag;
                 tagElement.addEventListener('click', () => toggleTagSelection(tagElement, tag));
@@ -721,8 +1044,8 @@ function filterTags() {
 
 // Добавление тега
 function addTag(tagName) {
-    if (!selectedTags.has(tagName)) {
-        selectedTags.add(tagName);
+    if (!selectedTags.includes(tagName)) {
+        selectedTags.push(tagName);
         renderTags();
         // Обновляем профили
         updateProfileCards();
@@ -731,8 +1054,9 @@ function addTag(tagName) {
 
 // Удаление тега
 function removeTag(tagName) {
-    if (selectedTags.has(tagName)) {
-        selectedTags.delete(tagName);
+    const index = selectedTags.indexOf(tagName);
+    if (index !== -1) {
+        selectedTags.splice(index, 1);
         renderTags();
         
         // Обновляем отображение в модальном окне, если оно открыто
@@ -793,7 +1117,7 @@ document.getElementById('addTagBtn').addEventListener('click', () => {
     // Обновляем выделение тегов в модальном окне
     document.querySelectorAll('.tag-pill').forEach(tagElement => {
         const tag = tagElement.dataset.tag;
-        if (selectedTags.has(tag)) {
+        if (selectedTags.includes(tag)) {
             tagElement.classList.add('selected');
         } else {
             tagElement.classList.remove('selected');
@@ -857,7 +1181,7 @@ async function extractTags() {
         }
         
         // Очищаем ранее выбранные теги
-        selectedTags.clear();
+        selectedTags = [];
         
         // Обрабатываем извлеченные теги, если они есть
         if (data.tags) {
@@ -877,7 +1201,7 @@ async function extractTags() {
             
             // Добавляем извлеченные теги в набор выбранных
             tagsList.forEach(tag => {
-                selectedTags.add(tag);
+                selectedTags.push(tag);
             });
             
             // Обновляем отображение тегов
@@ -983,7 +1307,7 @@ document.getElementById('changeCategoryBtn').addEventListener('click', async fun
                 loadingDiv.style.display = 'none';
 
                 // Clear existing tags
-                selectedTags.clear();
+                selectedTags = [];
                 renderTags();
 
                 // Add new tags
@@ -1071,7 +1395,7 @@ function showTagsModal() {
         // Добавляем теги для данной подкатегории
         tags.forEach(tag => {
             const tagElement = document.createElement('div');
-            tagElement.className = `available-tag ${selectedTags.has(tag) ? 'selected' : ''}`;
+            tagElement.className = `available-tag ${selectedTags.includes(tag) ? 'selected' : ''}`;
             tagElement.textContent = tag;
             tagElement.dataset.tag = tag;
             tagElement.addEventListener('click', () => toggleTagSelection(tagElement, tag));
@@ -1099,13 +1423,14 @@ function showTagsModal() {
 
 // Функция для переключения выбора тега
 function toggleTagSelection(tagElement, tagName) {
-    if (selectedTags.has(tagName)) {
+    const index = selectedTags.indexOf(tagName);
+    if (index !== -1) {
         // Удаляем тег, если он уже выбран
-        selectedTags.delete(tagName);
+        selectedTags.splice(index, 1);
         tagElement.classList.remove('selected');
     } else {
         // Добавляем тег, если он еще не выбран
-        selectedTags.add(tagName);
+        selectedTags.push(tagName);
         tagElement.classList.add('selected');
     }
     
@@ -1187,9 +1512,9 @@ function renderProfileCards() {
     
     // Filter profiles based on selected tags
     let filteredProfiles = profilesData;
-    if (selectedTags.size > 0) {
+    if (selectedTags.length > 0) {
         filteredProfiles = profilesData.filter(profile => {
-            return Array.from(selectedTags).some(tag => profile.tags.includes(tag));
+            return selectedTags.some(tag => profile.tags.includes(tag));
         });
     }
     
@@ -1253,7 +1578,7 @@ function renderProfileCards() {
             const tag = document.createElement('span');
             tag.className = 'profile-tag';
             // Подсвечиваем выбранные теги
-            if (selectedTags.has(tagName)) {
+            if (selectedTags.includes(tagName)) {
                 tag.classList.add('selected');
             }
             tag.textContent = tagName;
@@ -1455,7 +1780,11 @@ class ApiClient {
                     user_id: userId,
                     name: profileData.name,
                     about: profileData.about,
-                    who: profileData.who
+                    who: profileData.who,
+                    university: profileData.university,
+                    work: profileData.work,
+                    age: profileData.age,
+                    tags: profileData.tags
                 })
             });
             
@@ -1489,21 +1818,21 @@ const registration = {
     init() {
         // Обработчик для иконки профиля
         const profileIcon = document.getElementById('profileIcon');
-        const registerModal = document.getElementById('registerModal');
+        const authModal = document.getElementById('authModal');
         
-        if (profileIcon && registerModal) {
+        if (profileIcon && authModal) {
             profileIcon.addEventListener('click', () => {
-                registerModal.style.display = 'block';
+                authModal.style.display = 'block';
                 // По умолчанию показываем форму входа
                 this.showLoginForm();
             });
         }
 
         // Закрытие модального окна
-        const closeButtons = document.querySelectorAll('.close-btn[data-modal="registerModal"]');
+        const closeButtons = document.querySelectorAll('.close-btn[data-modal="authModal"]');
         closeButtons.forEach(button => {
             button.addEventListener('click', () => {
-                registerModal.style.display = 'none';
+                authModal.style.display = 'none';
                 // Останавливаем опрос статуса
                 if (this.statusCheckInterval) {
                     clearInterval(this.statusCheckInterval);
@@ -1525,7 +1854,7 @@ const registration = {
         document.getElementById('prevStep3').addEventListener('click', () => this.showStep(2));
         document.getElementById('completeRegistration').addEventListener('click', () => this.completeRegistration());
         document.getElementById('closeRegistration').addEventListener('click', () => {
-            registerModal.style.display = 'none';
+            authModal.style.display = 'none';
             if (this.statusCheckInterval) {
                 clearInterval(this.statusCheckInterval);
                 this.statusCheckInterval = null;
@@ -1534,8 +1863,8 @@ const registration = {
 
         // Клик вне модального окна
         window.addEventListener('click', (event) => {
-            if (event.target === registerModal) {
-                registerModal.style.display = 'none';
+            if (event.target === authModal) {
+                authModal.style.display = 'none';
                 if (this.statusCheckInterval) {
                     clearInterval(this.statusCheckInterval);
                     this.statusCheckInterval = null;
@@ -1608,17 +1937,26 @@ const registration = {
                     name: profileData.user.name || '',
                     about: profileData.user.about || '',
                     who: profileData.user.who || '',
+                    university: profileData.user.university || '',
+                    work: profileData.user.work || '',
+                    age: profileData.user.age || '',
+                    tags: profileData.user.tags || [],
                     isLoggedIn: true
                 }));
-                
-                // Закрываем модальное окно
-                document.getElementById('registerModal').style.display = 'none';
                 
                 // Обновляем обработчики иконки профиля
                 updateProfileIconHandler();
                 
-                // Показываем сообщение об успешном входе
-                alert('Вы успешно вошли в систему!');
+                // Обновляем имя пользователя в навигационной панели
+                document.getElementById('userDisplayName').textContent = profileData.user.name || telegramUsername;
+                
+                // Обновляем видимость элементов интерфейса
+                document.getElementById('userAuthSection').style.display = 'none';
+                document.getElementById('userProfileSection').style.display = 'flex';
+                
+                // Закрываем модальное окно
+                const authModal = document.getElementById('authModal');
+                if (authModal) authModal.style.display = 'none';
             } else {
                 throw new Error(result.message || 'Ошибка при входе');
             }
@@ -1844,13 +2182,32 @@ document.addEventListener('DOMContentLoaded', () => {
 
 // Функция для открытия модального окна логина/регистрации
 function showLoginModal() {
-    document.getElementById('registerModal').style.display = 'block';
-    // По умолчанию показываем форму входа
-    registration.showLoginForm();
+    const authModal = document.getElementById('authModal');
+    if (authModal) {
+        authModal.style.display = 'block';
+        // По умолчанию показываем форму входа
+        if (typeof registration !== 'undefined' && registration.showLoginForm) {
+            registration.showLoginForm();
+        } else {
+            // Если объект registration не доступен, просто показываем вкладку входа
+            const loginTab = document.getElementById('loginTab');
+            const loginForm = document.getElementById('loginForm');
+            const registerTab = document.getElementById('registerTab');
+            const registrationForm = document.getElementById('registrationForm');
+            
+            if (loginTab) loginTab.classList.add('active');
+            if (registerTab) registerTab.classList.remove('active');
+            if (loginForm) loginForm.classList.add('active');
+            if (registrationForm) registrationForm.classList.remove('active');
+        }
+    }
 }
 
 // Функция для открытия модального окна профиля
-async function showProfileModal() {
+async function showProfileModal(event) {
+    // Предотвращаем всплытие события, если оно передано
+    if (event) event.stopPropagation();
+    
     // Проверяем, авторизован ли пользователь
     const userData = localStorage.getItem('user');
     
@@ -1871,6 +2228,13 @@ async function showProfileModal() {
     
     // Если пользователь авторизован, показываем профиль
     const profileModal = document.getElementById('profileModal');
+    if (!profileModal) return;
+    
+    // Закрываем окно авторизации, если оно открыто
+    const authModal = document.getElementById('authModal');
+    if (authModal) authModal.style.display = 'none';
+    
+    // Показываем модальное окно профиля
     profileModal.style.display = 'block';
     
     if (user.id) {
@@ -1885,8 +2249,76 @@ async function showProfileModal() {
             // Заполняем поля формы
             document.getElementById('profileName').value = profileData.user.name || '';
             document.getElementById('profileAbout').value = profileData.user.about || '';
+            document.getElementById('profileUniversity').value = profileData.user.university || '';
+            document.getElementById('profileWork').value = profileData.user.work || '';
+            document.getElementById('profileAge').value = profileData.user.age || '';
             
-            // Устанавливаем радиокнопку
+            // Заполняем теги
+            const selectedTagsContainer = document.getElementById('profileSelectedTags');
+            if (selectedTagsContainer) {
+                selectedTagsContainer.innerHTML = '';
+                
+                if (profileData.user.tags && Array.isArray(profileData.user.tags)) {
+                    // Группируем теги по категориям
+                    const tagsByCategory = groupTagsByCategory(profileData.user.tags);
+                    
+                    // Для каждой категории создаем группу с заголовком и тегами
+                    Object.keys(tagsByCategory).forEach((category, index) => {
+                        // Если это не первая категория, добавляем разделитель
+                        if (index > 0) {
+                            const divider = document.createElement('div');
+                            divider.className = 'tags-category-divider';
+                            selectedTagsContainer.appendChild(divider);
+                        }
+                        
+                        // Добавляем заголовок категории
+                        const categoryHeader = document.createElement('div');
+                        categoryHeader.className = 'tags-category-header';
+                        categoryHeader.textContent = category;
+                        selectedTagsContainer.appendChild(categoryHeader);
+                        
+                        // Добавляем контейнер для тегов этой категории
+                        const categoryTagsContainer = document.createElement('div');
+                        categoryTagsContainer.className = 'tags-category-container';
+                        
+                        // Добавляем теги этой категории
+                        tagsByCategory[category].forEach(tag => {
+                            const tagElement = document.createElement('span');
+                            tagElement.className = 'tag';
+                            tagElement.textContent = tag;
+                            
+                            const removeButton = document.createElement('span');
+                            removeButton.className = 'remove-tag';
+                            removeButton.innerHTML = '&times;';
+                            removeButton.addEventListener('click', function(e) {
+                                e.stopPropagation(); // Предотвращаем всплытие события
+                                tagElement.remove();
+                                
+                                // Удаляем тег из массива тегов
+                                profileData.user.tags = profileData.user.tags.filter(t => t !== tag);
+                                
+                                // Если это был последний тег в категории, удаляем заголовок и разделитель
+                                if (categoryTagsContainer.querySelectorAll('.tag').length === 0) {
+                                    categoryHeader.remove();
+                                    if (index > 0) {
+                                        const dividers = selectedTagsContainer.querySelectorAll('.tags-category-divider');
+                                        if (dividers.length > 0) {
+                                            dividers[index - 1].remove();
+                                        }
+                                    }
+                                }
+                            });
+                            
+                            tagElement.appendChild(removeButton);
+                            categoryTagsContainer.appendChild(tagElement);
+                        });
+                        
+                        selectedTagsContainer.appendChild(categoryTagsContainer);
+                    });
+                }
+            }
+            
+            // Устанавливаем радиокнопку и отображаем соответствующие поля
             const who = profileData.user.who || '';
             const radioButtons = document.querySelectorAll('input[name="profileWho"]');
             radioButtons.forEach(radio => {
@@ -1894,6 +2326,9 @@ async function showProfileModal() {
                     radio.checked = true;
                 }
             });
+            
+            // Отображаем соответствующие поля в зависимости от роли
+            toggleRoleFields(who);
         } catch (error) {
             console.error('Ошибка при загрузке профиля:', error);
         } finally {
@@ -1908,23 +2343,44 @@ function initProfileHandlers() {
     // Закрытие модального окна профиля
     const closeProfileBtn = document.querySelector('.close-btn[data-modal="profileModal"]');
     if (closeProfileBtn) {
-        closeProfileBtn.addEventListener('click', () => {
-            document.getElementById('profileModal').style.display = 'none';
+        closeProfileBtn.addEventListener('click', (event) => {
+            event.stopPropagation(); // Предотвращаем всплытие события
+            const profileModal = document.getElementById('profileModal');
+            if (profileModal) profileModal.style.display = 'none';
         });
     }
     
     // Клик вне модального окна профиля
-    window.addEventListener('click', (event) => {
-        const profileModal = document.getElementById('profileModal');
-        if (event.target === profileModal) {
-            profileModal.style.display = 'none';
-        }
-    });
+    const profileModal = document.getElementById('profileModal');
+    if (profileModal) {
+        profileModal.addEventListener('click', (event) => {
+            if (event.target === profileModal) {
+                event.stopPropagation(); // Предотвращаем всплытие события
+                profileModal.style.display = 'none';
+            }
+        });
+    }
+    
+    // Обработчики для выбора роли пользователя
+    const roleRadios = document.querySelectorAll('input[name="profileWho"]');
+    if (roleRadios) {
+        roleRadios.forEach(radio => {
+            radio.addEventListener('change', function() {
+                toggleRoleFields(this.value);
+            });
+        });
+    }
     
     // Сохранение профиля
     const saveProfileBtn = document.getElementById('saveProfileButton');
     if (saveProfileBtn) {
         saveProfileBtn.addEventListener('click', saveUserProfile);
+    }
+    
+    // Выбор тегов для профиля
+    const profileTagsButton = document.getElementById('profileTagsButton');
+    if (profileTagsButton) {
+        profileTagsButton.addEventListener('click', showProfileTagsModal);
     }
     
     // Выход из системы
@@ -1933,8 +2389,402 @@ function initProfileHandlers() {
         logoutBtn.addEventListener('click', logout);
     }
     
-    // Назначаем обработчики на иконку профиля в зависимости от состояния авторизации
-    updateProfileIconHandler();
+    // Инициализация модального окна выбора тегов
+    initProfileTagsModal();
+}
+
+// Показать модальное окно для выбора тегов в профиле
+function showProfileTagsModal() {
+    const modal = document.getElementById('profileTagsModal');
+    if (!modal) {
+        console.error('Модальное окно тегов не найдено');
+        return;
+    }
+    
+    // Получаем выбранные теги из профиля пользователя
+    selectedTags = getSelectedTags();
+    
+    // Очищаем контейнеры подкатегорий и тегов
+    const subcategoriesContainer = document.getElementById('tagsSubcategoriesContainer');
+    const tagsContainer = document.getElementById('tagsContainer');
+    if (subcategoriesContainer) subcategoriesContainer.style.display = 'none';
+    if (tagsContainer) tagsContainer.style.display = 'none';
+    
+    // Отображение модального окна
+    modal.style.display = 'block';
+    
+    // Загрузка иерархии тегов
+    loadTagHierarchy();
+    
+    // Отображение выбранных тегов
+    updateSelectedTagsDisplay();
+}
+
+function updateSelectedTagsDisplay() {
+    const selectedTagsContainer = document.getElementById('selectedTagsInModal');
+    if (!selectedTagsContainer) {
+        console.error('Контейнер выбранных тегов не найден');
+        return;
+    }
+    
+    selectedTagsContainer.innerHTML = '';
+    
+    if (selectedTags.length === 0) {
+        const emptyMessage = document.createElement('div');
+        emptyMessage.classList.add('empty-tags-message');
+        emptyMessage.textContent = 'Нет выбранных тегов';
+        selectedTagsContainer.appendChild(emptyMessage);
+        return;
+    }
+    
+    selectedTags.forEach(tag => {
+        const tagElement = document.createElement('div');
+        tagElement.classList.add('selected-tag-item');
+        
+        const tagText = document.createElement('span');
+        tagText.textContent = tag;
+        tagElement.appendChild(tagText);
+        
+        const removeButton = document.createElement('span');
+        removeButton.classList.add('remove-selected-tag');
+        removeButton.innerHTML = '&times;';
+        removeButton.addEventListener('click', function() {
+            removeSelectedTag(tag);
+            
+            // Также обновляем статус в списке доступных тегов
+            document.querySelectorAll('.available-tag').forEach(tagElem => {
+                const tagContent = tagElem.querySelector('span:last-child').textContent;
+                if (tagContent === tag) {
+                    tagElem.classList.remove('selected');
+                }
+            });
+        });
+        
+        tagElement.appendChild(removeButton);
+        selectedTagsContainer.appendChild(tagElement);
+    });
+}
+
+// Загрузка иерархии тегов и отображение основных категорий
+function loadTagHierarchy() {
+    const categoryContainer = document.querySelector('.category-buttons');
+    if (!categoryContainer) {
+        console.error('Элемент категорий не найден');
+        return;
+    }
+    
+    // Очистить контейнер
+    categoryContainer.innerHTML = '';
+    
+    // Создаем кнопки для каждой категории, используя глобальный объект tags_hierarchy
+    Object.keys(tags_hierarchy).forEach(category => {
+        const categoryBtn = document.createElement('div');
+        categoryBtn.className = 'category-button';
+        categoryBtn.textContent = category;
+        categoryBtn.dataset.category = category;
+        
+        categoryBtn.addEventListener('click', function() {
+            // Удаляем активный класс у всех кнопок категорий
+            document.querySelectorAll('.category-button').forEach(btn => btn.classList.remove('active'));
+            // Добавляем активный класс текущей кнопке
+            this.classList.add('active');
+            // Показываем подкатегории для выбранной категории
+            showSubcategories(category);
+        });
+        
+        categoryContainer.appendChild(categoryBtn);
+    });
+    
+    // Отображаем текущие выбранные теги
+    const currentTags = getSelectedTags();
+    currentTags.forEach(tag => {
+        addSelectedTag(tag);
+    });
+}
+
+// Показать подкатегории для выбранной категории
+function showSubcategories(category) {
+    const subcategoriesContainer = document.getElementById('tagsSubcategoriesContainer');
+    subcategoriesContainer.style.display = 'block';
+    
+    // Обновляем заголовок
+    const subcategoryHeader = subcategoriesContainer.querySelector('h3') || document.createElement('h3');
+    subcategoryHeader.textContent = 'Подкатегории';
+    if (!subcategoryHeader.parentElement) {
+        subcategoriesContainer.prepend(subcategoryHeader);
+    }
+    
+    // Создаем контейнер для кнопок подкатегорий, если его нет
+    let subcategoryButtons = subcategoriesContainer.querySelector('.subcategory-buttons');
+    if (!subcategoryButtons) {
+        subcategoryButtons = document.createElement('div');
+        subcategoryButtons.className = 'subcategory-buttons';
+        subcategoriesContainer.appendChild(subcategoryButtons);
+    } else {
+        subcategoryButtons.innerHTML = '';
+    }
+    
+    // Создаем кнопки для каждой подкатегории в выбранной категории
+    Object.keys(tags_hierarchy[category]).forEach(subcategory => {
+        const subcategoryBtn = document.createElement('div');
+        subcategoryBtn.className = 'subcategory-button';
+        subcategoryBtn.textContent = subcategory;
+        subcategoryBtn.dataset.subcategory = subcategory;
+        subcategoryBtn.dataset.category = category;
+        
+        subcategoryBtn.addEventListener('click', function() {
+            // Удаляем активный класс у всех кнопок подкатегорий
+            document.querySelectorAll('.subcategory-button').forEach(btn => btn.classList.remove('active'));
+            // Добавляем активный класс текущей кнопке
+            this.classList.add('active');
+            // Показываем теги для выбранной подкатегории
+            showTags(category, subcategory);
+        });
+        
+        subcategoryButtons.appendChild(subcategoryBtn);
+    });
+    
+    // Скрываем контейнер тегов
+    document.getElementById('tagsContainer').style.display = 'none';
+}
+
+// Показать теги для выбранной подкатегории
+function showTags(category, subcategory) {
+    const tagsContainer = document.getElementById('tagsContainer');
+    tagsContainer.style.display = 'block';
+    
+    // Обновляем заголовок
+    const tagsHeader = tagsContainer.querySelector('h3') || document.createElement('h3');
+    tagsHeader.textContent = 'Теги';
+    if (!tagsHeader.parentElement) {
+        tagsContainer.prepend(tagsHeader);
+    }
+    
+    // Создаем контейнер для тегов, если его нет
+    let availableTags = tagsContainer.querySelector('.available-tags');
+    if (!availableTags) {
+        availableTags = document.createElement('div');
+        availableTags.className = 'available-tags';
+        tagsContainer.appendChild(availableTags);
+    } else {
+        availableTags.innerHTML = '';
+    }
+    
+    // Получаем текущие выбранные теги
+    const currentTags = Array.from(document.querySelectorAll('#selectedTagsInModal .selected-tag-item'))
+        .map(el => el.textContent.trim().replace('×', '').trim());
+    
+    // Создаем элементы для каждого тега в выбранной подкатегории
+    tags_hierarchy[category][subcategory].forEach(tag => {
+        const tagElement = document.createElement('div');
+        tagElement.className = 'available-tag';
+        if (currentTags.includes(tag)) {
+            tagElement.classList.add('selected');
+        }
+        
+        // Добавляем чекбокс
+        const checkbox = document.createElement('span');
+        checkbox.className = 'tag-checkbox';
+        tagElement.appendChild(checkbox);
+        
+        // Добавляем текст тега
+        const tagText = document.createElement('span');
+        tagText.textContent = tag;
+        tagElement.appendChild(tagText);
+        
+        tagElement.addEventListener('click', function() {
+            toggleTagSelection(this, tag);
+        });
+        
+        availableTags.appendChild(tagElement);
+    });
+}
+
+function toggleTagSelection(tagElement, tagText) {
+    const isSelected = tagElement.classList.contains('selected');
+    
+    if (isSelected) {
+        // Убираем выделение
+        tagElement.classList.remove('selected');
+        // Удаляем тег из блока выбранных тегов
+        removeSelectedTag(tagText);
+    } else {
+        // Добавляем выделение
+        tagElement.classList.add('selected');
+        // Добавляем тег в блок выбранных тегов
+        addSelectedTag(tagText);
+    }
+}
+
+function addSelectedTag(tagText) {
+    const selectedTagsContainer = document.getElementById('selectedTagsInModal');
+    
+    // Проверяем, не добавлен ли уже этот тег
+    const existingTags = Array.from(selectedTagsContainer.querySelectorAll('.selected-tag-item'))
+        .map(el => el.textContent.trim().replace('×', '').trim());
+    
+    if (!existingTags.includes(tagText)) {
+        const tagElement = document.createElement('div');
+        tagElement.className = 'selected-tag-item';
+        
+        const tagTextElement = document.createElement('span');
+        tagTextElement.textContent = tagText;
+        tagElement.appendChild(tagTextElement);
+        
+        const removeButton = document.createElement('span');
+        removeButton.className = 'remove-selected-tag';
+        removeButton.textContent = '×';
+        removeButton.addEventListener('click', function(e) {
+            e.stopPropagation();
+            removeSelectedTag(tagText);
+            
+            // Также обновляем статус в списке доступных тегов
+            document.querySelectorAll('.available-tag').forEach(tag => {
+                const tagContent = tag.querySelector('span:last-child').textContent;
+                if (tagContent === tagText) {
+                    tag.classList.remove('selected');
+                }
+            });
+        });
+        
+        tagElement.appendChild(removeButton);
+        selectedTagsContainer.appendChild(tagElement);
+    }
+}
+
+function removeSelectedTag(tagText) {
+    const selectedTagsContainer = document.getElementById('selectedTagsInModal');
+    const tags = selectedTagsContainer.querySelectorAll('.selected-tag-item');
+    
+    tags.forEach(tag => {
+        const content = tag.textContent.trim().replace('×', '').trim();
+        if (content === tagText) {
+            tag.remove();
+        }
+    });
+}
+
+function saveSelectedTags() {
+    // Получаем выбранные теги из модального окна
+    const newTags = Array.from(document.querySelectorAll('#selectedTagsInModal .selected-tag-item'))
+        .map(el => el.textContent.trim().replace('×', '').trim());
+    
+    // Получаем данные пользователя из хранилища
+    const userData = JSON.parse(localStorage.getItem('user'));
+    if (!userData) {
+        console.error('Пользователь не авторизован');
+        return;
+    }
+    
+    // Обновляем теги в данных пользователя
+    userData.tags = newTags;
+    localStorage.setItem('user', JSON.stringify(userData));
+    
+    // Обновляем глобальную переменную selectedTags
+    selectedTags = [...newTags];
+    
+    // Группируем теги по категориям
+    const tagsByCategory = groupTagsByCategory(selectedTags);
+    
+    // Обновляем теги в профиле
+    const profileSelectedTags = document.getElementById('profileSelectedTags');
+    if (profileSelectedTags) {
+        profileSelectedTags.innerHTML = '';
+        
+        // Для каждой категории создаем группу с заголовком и тегами
+        Object.keys(tagsByCategory).forEach((category, index) => {
+            // Если это не первая категория, добавляем разделитель
+            if (index > 0) {
+                const divider = document.createElement('div');
+                divider.className = 'tags-category-divider';
+                profileSelectedTags.appendChild(divider);
+            }
+            
+            // Добавляем заголовок категории
+            const categoryHeader = document.createElement('div');
+            categoryHeader.className = 'tags-category-header';
+            categoryHeader.textContent = category;
+            profileSelectedTags.appendChild(categoryHeader);
+            
+            // Добавляем контейнер для тегов этой категории
+            const categoryTagsContainer = document.createElement('div');
+            categoryTagsContainer.className = 'tags-category-container';
+            
+            // Добавляем теги этой категории
+            tagsByCategory[category].forEach(tag => {
+                const tagElement = document.createElement('span');
+                tagElement.className = 'tag';
+                tagElement.textContent = tag;
+                
+                const removeButton = document.createElement('span');
+                removeButton.className = 'remove-tag';
+                removeButton.innerHTML = '&times;';
+                removeButton.addEventListener('click', function(e) {
+                    e.stopPropagation(); // Предотвращаем всплытие события
+                    tagElement.remove();
+                    
+                    // Удаляем тег из данных пользователя
+                    const updatedUserData = JSON.parse(localStorage.getItem('user'));
+                    if (updatedUserData && updatedUserData.tags) {
+                        updatedUserData.tags = updatedUserData.tags.filter(t => t !== tag);
+                        localStorage.setItem('user', JSON.stringify(updatedUserData));
+                    }
+                    
+                    // Если это был последний тег в категории, удаляем заголовок и разделитель
+                    if (categoryTagsContainer.querySelectorAll('.tag').length === 0) {
+                        categoryHeader.remove();
+                        if (index > 0) {
+                            const dividers = profileSelectedTags.querySelectorAll('.tags-category-divider');
+                            if (dividers.length > 0) {
+                                dividers[index - 1].remove();
+                            }
+                        }
+                    }
+                });
+                
+                tagElement.appendChild(removeButton);
+                categoryTagsContainer.appendChild(tagElement);
+            });
+            
+            profileSelectedTags.appendChild(categoryTagsContainer);
+        });
+    }
+    
+    // Закрываем модальное окно
+    closeProfileTagsModal();
+}
+
+function closeProfileTagsModal() {
+    const modal = document.getElementById('profileTagsModal');
+    if (!modal) return;
+    
+    // Просто скрываем модальное окно
+    modal.style.display = 'none';
+}
+
+// Функция для переключения полей в зависимости от роли
+function toggleRoleFields(role) {
+    const universityField = document.getElementById('universityField');
+    const workField = document.getElementById('workField');
+    
+    if (role === 'employer') {
+        // Если выбран работодатель - показываем поле работы и скрываем университет
+        if (universityField) universityField.style.display = 'none';
+        if (workField) workField.style.display = 'block';
+    } else {
+        // Если выбран студент или преподаватель - показываем поле университета и скрываем работу
+        if (universityField) universityField.style.display = 'block';
+        if (workField) workField.style.display = 'none';
+    }
+    
+    // Подсветим выбранную опцию
+    const radioLabels = document.querySelectorAll('.radio-label');
+    radioLabels.forEach(label => {
+        const radio = label.querySelector('input[type="radio"]');
+        if (radio && radio.value === role) {
+            radio.checked = true;
+        }
+    });
 }
 
 // Обновление обработчика иконки профиля
@@ -1943,8 +2793,8 @@ function updateProfileIconHandler() {
     if (!profileIcon) return;
     
     // Удаляем существующие обработчики
-    profileIcon.removeEventListener('click', showLoginModal);
-    profileIcon.removeEventListener('click', showProfileModal);
+    const newProfileIcon = profileIcon.cloneNode(true);
+    profileIcon.parentNode.replaceChild(newProfileIcon, profileIcon);
     
     // Проверяем статус авторизации
     const userData = localStorage.getItem('user');
@@ -1957,10 +2807,28 @@ function updateProfileIconHandler() {
             
             if (isLoggedIn) {
                 // Если пользователь авторизован, добавляем класс logged-in
-                profileIcon.classList.add('logged-in');
+                newProfileIcon.classList.add('logged-in');
+                
+                // Обновляем текст имени пользователя, если элемент существует
+                const userDisplayName = document.getElementById('userDisplayName');
+                if (userDisplayName && user.name) {
+                    userDisplayName.textContent = user.name;
+                }
+                
+                // Показываем секцию профиля и скрываем кнопки авторизации
+                const userAuthSection = document.getElementById('userAuthSection');
+                const userProfileSection = document.getElementById('userProfileSection');
+                if (userAuthSection) userAuthSection.style.display = 'none';
+                if (userProfileSection) userProfileSection.style.display = 'flex';
             } else {
                 // Если пользователь не авторизован, удаляем класс logged-in
-                profileIcon.classList.remove('logged-in');
+                newProfileIcon.classList.remove('logged-in');
+                
+                // Показываем кнопки авторизации и скрываем секцию профиля
+                const userAuthSection = document.getElementById('userAuthSection');
+                const userProfileSection = document.getElementById('userProfileSection');
+                if (userAuthSection) userAuthSection.style.display = 'flex';
+                if (userProfileSection) userProfileSection.style.display = 'none';
             }
         } catch (e) {
             console.error('Ошибка при проверке авторизации:', e);
@@ -1968,14 +2836,26 @@ function updateProfileIconHandler() {
         }
     } else {
         // Если данных пользователя нет, удаляем класс logged-in
-        profileIcon.classList.remove('logged-in');
+        newProfileIcon.classList.remove('logged-in');
+        
+        // Показываем кнопки авторизации и скрываем секцию профиля
+        const userAuthSection = document.getElementById('userAuthSection');
+        const userProfileSection = document.getElementById('userProfileSection');
+        if (userAuthSection) userAuthSection.style.display = 'flex';
+        if (userProfileSection) userProfileSection.style.display = 'none';
     }
     
     // Назначаем соответствующий обработчик
     if (isLoggedIn) {
-        profileIcon.addEventListener('click', showProfileModal);
+        newProfileIcon.addEventListener('click', function(event) {
+            event.stopPropagation(); // Предотвращаем всплытие события
+            showProfileModal(event);
+        });
     } else {
-        profileIcon.addEventListener('click', showLoginModal);
+        newProfileIcon.addEventListener('click', function(event) {
+            event.stopPropagation(); // Предотвращаем всплытие события
+            showLoginModal(event);
+        });
     }
 }
 
@@ -1992,6 +2872,14 @@ async function saveUserProfile() {
     // Получаем значения полей
     const name = document.getElementById('profileName').value;
     const about = document.getElementById('profileAbout').value;
+    const university = document.getElementById('profileUniversity').value;
+    const work = document.getElementById('profileWork').value;
+    const age = document.getElementById('profileAge').value ? parseInt(document.getElementById('profileAge').value) : null;
+    
+    // Получаем выбранные теги из контейнера
+    const tagsElements = document.querySelectorAll('#profileSelectedTags .tag');
+    const tags = Array.from(tagsElements).map(tag => tag.textContent);
+    
     let who = '';
     
     // Получаем выбранное значение радиокнопки
@@ -2011,7 +2899,11 @@ async function saveUserProfile() {
         const result = await apiClient.updateUserProfile(userData.id, {
             name: name,
             about: about,
-            who: who
+            who: who,
+            university: university,
+            work: work,
+            age: age,
+            tags: tags
         });
         
         if (result.status === 'success') {
@@ -2021,6 +2913,10 @@ async function saveUserProfile() {
             userData.name = name;
             userData.about = about;
             userData.who = who;
+            userData.university = university;
+            userData.work = work;
+            userData.age = age;
+            userData.tags = tags;
             localStorage.setItem('user', JSON.stringify(userData));
             
             // Закрываем модальное окно
@@ -2049,4 +2945,174 @@ function logout() {
     document.getElementById('profileModal').style.display = 'none';
     
     alert('Вы вышли из системы');
+}
+
+// Инициализация модальных окон при загрузке документа
+document.addEventListener('DOMContentLoaded', function() {
+    // Проверяем аутентификацию пользователя
+    checkUserAuthentication();
+    
+    // Инициализируем модальное окно для выбора тегов
+    initModal();
+    
+    // Инициализируем модальное окно для профиля
+    initProfileHandlers();
+    
+    // Инициализируем модальное окно для тегов
+    initTagsModal();
+    
+    // Обработчики для авторизации
+    initAuthHandlers();
+    
+    // Инициализация регистрации
+    if (typeof registration !== 'undefined' && registration.init) {
+        registration.init();
+    }
+    
+    // Обработчик для иконки профиля (только один раз!)
+    updateProfileIconHandler();
+    
+    // Отрисовка карточек профилей
+    renderProfileCards();
+}); 
+
+// Получение выбранных тегов из профиля
+function getSelectedTags() {
+    // Получаем данные пользователя из localStorage
+    const userData = localStorage.getItem('user');
+    if (userData) {
+        try {
+            const user = JSON.parse(userData);
+            if (user && user.tags && Array.isArray(user.tags)) {
+                return user.tags;
+            }
+        } catch (e) {
+            console.error('Ошибка при получении тегов пользователя:', e);
+        }
+    }
+    return [];
+}
+
+// Инициализация обработчиков для модального окна тегов
+function initProfileTagsModal() {
+    // Кнопка закрытия модального окна
+    const closeButton = document.querySelector('.close-btn[data-modal="profileTagsModal"]');
+    if (closeButton) {
+        closeButton.addEventListener('click', function() {
+            closeProfileTagsModal();
+        });
+    } else {
+        console.error('Кнопка закрытия модального окна тегов не найдена');
+    }
+    
+    // Закрытие по клику вне модального окна
+    const modal = document.getElementById('profileTagsModal');
+    if (modal) {
+        modal.addEventListener('click', function(e) {
+            if (e.target === this) {
+                closeProfileTagsModal();
+            }
+        });
+    } else {
+        console.error('Модальное окно тегов не найдено');
+    }
+    
+    // Кнопка сохранения тегов
+    const saveButton = document.getElementById('saveTagsButton');
+    if (saveButton) {
+        saveButton.addEventListener('click', saveSelectedTags);
+    } else {
+        console.error('Кнопка сохранения тегов не найдена');
+    }
+}
+
+// Вызываем инициализацию после загрузки DOM
+document.addEventListener('DOMContentLoaded', function() {
+    // ... existing code ...
+    initProfileTagsModal();
+    // ... existing code ...
+}); 
+
+function removeSelectedTag(tag) {
+    const index = selectedTags.indexOf(tag);
+    if (index !== -1) {
+        selectedTags.splice(index, 1);
+        updateSelectedTagsDisplay();
+    }
+}
+
+function addSelectedTag(tag) {
+    if (!selectedTags.includes(tag)) {
+        selectedTags.push(tag);
+        updateSelectedTagsDisplay();
+    }
+}
+
+function saveProfileTags() {
+    // Здесь будет логика сохранения выбранных тегов в профиле пользователя
+    // Например, через AJAX-запрос на сервер
+    
+    // Закрыть модальное окно после сохранения
+    closeProfileTagsModal();
+    
+    // Обновить отображение тегов в профиле
+    updateProfileTagsDisplay();
+}
+
+function updateProfileTagsDisplay() {
+    const profileTagsContainer = document.querySelector('.profile-tags-container');
+    if (!profileTagsContainer) return;
+    
+    profileTagsContainer.innerHTML = '';
+    
+    if (selectedTags.length === 0) {
+        const emptyElement = document.createElement('span');
+        emptyElement.classList.add('no-tags-message');
+        emptyElement.textContent = 'Нажмите, чтобы добавить теги';
+        profileTagsContainer.appendChild(emptyElement);
+        return;
+    }
+    
+    selectedTags.forEach(tag => {
+        const tagElement = document.createElement('span');
+        tagElement.classList.add('profile-tag');
+        tagElement.textContent = tag;
+        profileTagsContainer.appendChild(tagElement);
+    });
+}
+
+// Функция для группировки тегов по категориям
+function groupTagsByCategory(tags) {
+    const tagsByCategory = {};
+    
+    // Для каждого тега определяем категорию и подкатегорию
+    tags.forEach(tag => {
+        let foundCategory = null;
+        let foundSubcategory = null;
+        
+        // Ищем тег в иерархии тегов
+        for (const category in tags_hierarchy) {
+            for (const subcategory in tags_hierarchy[category]) {
+                if (tags_hierarchy[category][subcategory].includes(tag)) {
+                    foundCategory = category;
+                    foundSubcategory = subcategory;
+                    break;
+                }
+            }
+            if (foundCategory) break;
+        }
+        
+        // Если категория не найдена, помещаем в "Другое"
+        const categoryName = foundCategory || 'Другое';
+        
+        // Инициализируем массив для категории, если он еще не существует
+        if (!tagsByCategory[categoryName]) {
+            tagsByCategory[categoryName] = [];
+        }
+        
+        // Добавляем тег в соответствующую категорию
+        tagsByCategory[categoryName].push(tag);
+    });
+    
+    return tagsByCategory;
 } 
