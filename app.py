@@ -571,7 +571,11 @@ def get_user_profile():
                         'telegram_username': user['tg'],
                         'name': user.get('name', ''),
                         'about': user.get('about', ''),
-                        'who': user.get('who', '')
+                        'who': user.get('who', ''),
+                        'university': user.get('university', ''),
+                        'work': user.get('work', ''),
+                        'age': user.get('age', ''),
+                        'tags': user.get('tags', [])
                     }
                 })
             else:
@@ -599,6 +603,10 @@ def update_user_profile():
     name = data.get('name')
     about = data.get('about')
     who = data.get('who')
+    university = data.get('university')
+    work = data.get('work')
+    age = data.get('age')
+    tags = data.get('tags')
     
     if not user_id:
         return jsonify({'error': 'Не указан ID пользователя'}), 400
@@ -613,6 +621,14 @@ def update_user_profile():
         update_data['about'] = about
     if who is not None:
         update_data['who'] = who
+    if university is not None:
+        update_data['university'] = university
+    if work is not None:
+        update_data['work'] = work
+    if age is not None:
+        update_data['age'] = age
+    if tags is not None:
+        update_data['tags'] = tags
     
     try:
         response = requests.patch(

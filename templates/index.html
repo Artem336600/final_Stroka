@@ -191,6 +191,7 @@
     <div id="profileModal" class="modal">
         <div class="modal-content profile-modal">
             <span class="close-btn" data-modal="profileModal">&times;</span>
+            
             <div class="profile-header">
                 <div class="profile-avatar">
                     <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="48" height="48" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
@@ -209,31 +210,103 @@
                 </button>
             </div>
             
-            <div id="profileForm">
-                <div class="form-group">
-                    <label for="profileName">Имя</label>
-                    <input type="text" id="profileName" placeholder="Введите ваше имя">
+            <div id="profileForm" class="new-profile-form">
+                <div class="profile-form-columns">
+                    <div class="profile-form-column">
+                        <div class="form-group">
+                            <label for="profileName">Имя</label>
+                            <input type="text" id="profileName" placeholder="Введите ваше имя">
+                        </div>
+                        
+                        <div class="form-group">
+                            <label for="profileAbout">О себе</label>
+                            <textarea id="profileAbout" placeholder="Расскажите о себе" rows="4"></textarea>
+                        </div>
+                        
+                        <div class="form-group">
+                            <label for="profileAge">Возраст</label>
+                            <input type="number" id="profileAge" placeholder="Укажите ваш возраст" min="16" max="100">
+                        </div>
+                    </div>
+                    
+                    <div class="profile-form-column">
+                        <div class="form-group">
+                            <label class="section-label">Кто вы</label>
+                            <div class="radio-group">
+                                <label class="radio-label">
+                                    <input type="radio" name="profileWho" value="student">
+                                    <span class="radio-text">Студент</span>
+                                    <div class="radio-bg"></div>
+                                </label>
+                                <label class="radio-label">
+                                    <input type="radio" name="profileWho" value="teacher">
+                                    <span class="radio-text">Преподаватель</span>
+                                    <div class="radio-bg"></div>
+                                </label>
+                                <label class="radio-label">
+                                    <input type="radio" name="profileWho" value="employer">
+                                    <span class="radio-text">Работодатель</span>
+                                    <div class="radio-bg"></div>
+                                </label>
+                            </div>
+                        </div>
+                        
+                        <div class="form-group" id="universityField">
+                            <label for="profileUniversity">Университет</label>
+                            <input type="text" id="profileUniversity" placeholder="Укажите ваш университет">
+                        </div>
+                        
+                        <div class="form-group" id="workField" style="display: none;">
+                            <label for="profileWork">Место работы</label>
+                            <input type="text" id="profileWork" placeholder="Укажите место работы">
+                        </div>
+                    </div>
                 </div>
                 
-                <div class="form-group">
-                    <label for="profileAbout">О себе</label>
-                    <textarea id="profileAbout" placeholder="Расскажите о себе" rows="4"></textarea>
-                </div>
-                
-                <div class="form-group">
-                    <label>Кто вы</label>
-                    <div class="radio-group">
-                        <label class="radio-label">
-                            <input type="radio" name="profileWho" value="student"> Студент
-                        </label>
-                        <label class="radio-label">
-                            <input type="radio" name="profileWho" value="teacher"> Преподаватель
-                        </label>
+                <div class="form-group tags-section">
+                    <label for="profileTags">Теги</label>
+                    <div class="tags-selector">
+                        <div id="profileSelectedTags" class="selected-tags"></div>
+                        <button type="button" id="profileTagsButton" class="tag-selector-btn">Выбрать теги</button>
                     </div>
                 </div>
                 
                 <div id="profileError" class="form-error"></div>
-                <button id="saveProfileButton" class="complete-btn">Сохранить</button>
+                <div class="profile-actions">
+                    <button id="saveProfileButton" class="complete-btn">Сохранить</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal для выбора тегов в профиле -->
+    <div id="profileTagsModal" class="modal">
+        <div class="modal-content tags-modal">
+            <span class="close-btn" data-modal="profileTagsModal">&times;</span>
+            <h2>Выберите теги</h2>
+            
+            <div class="tags-category-selector">
+                <h3>Категории</h3>
+                <div class="category-buttons"></div>
+            </div>
+            
+            <div id="tagsSubcategoriesContainer" style="display: none;">
+                <h3 id="selectedCategoryTitle">Подкатегории</h3>
+                <div class="subcategory-buttons"></div>
+            </div>
+            
+            <div id="tagsContainer" style="display: none;">
+                <h3 id="selectedSubcategoryTitle">Теги</h3>
+                <div class="available-tags"></div>
+            </div>
+            
+            <div class="tags-selection">
+                <h3>Выбранные теги</h3>
+                <div id="selectedTagsInModal" class="selected-tags-container"></div>
+            </div>
+            
+            <div class="modal-actions">
+                <button id="saveTagsButton" class="complete-btn">Сохранить</button>
             </div>
         </div>
     </div>
